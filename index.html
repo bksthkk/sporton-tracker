@@ -201,8 +201,8 @@
   /* test-status cell */
   tbody td.test-cell {
     padding: 4px;
-    width: 84px;
-    cursor: pointer;
+    width: 92px;
+    cursor: default;
     position: relative;
   }
   .pill {
@@ -213,6 +213,7 @@
     text-align: center;
     border: 1px solid transparent;
     color: var(--muted);
+    cursor: pointer;
   }
   .pill.empty {
     background: #faf2e6; border-color: var(--line); color: #b8a896;
@@ -223,8 +224,72 @@
   .pill.s-pending { background: var(--s-pending-bg); color: var(--s-pending-fg); }
   .pill.s-delay   { background: var(--s-delay-bg);   color: var(--s-delay-fg); }
   .pill.s-fail    { background: var(--s-fail-bg);    color: var(--s-fail-fg); }
-  tbody td.test-cell:hover .pill {
+  .pill:hover {
     box-shadow: 0 0 0 2px rgba(198,93,61,.35);
+  }
+
+  /* small "due date" pill under each test-status pill (MM/DD) */
+  .cell-date {
+    display: block; width: 100%;
+    margin-top: 3px;
+    padding: 2px 4px;
+    font-size: 10.5px; font-weight: 600;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+    background: #fffaf1;
+    color: var(--terracotta);
+    cursor: pointer;
+    font-family: 'Segoe UI', 'Microsoft JhengHei', monospace;
+  }
+  .cell-date.empty { color: #c4b8a6; font-weight: 500; }
+  .cell-date:hover {
+    border-color: var(--terracotta);
+    background: #fff3e6;
+    color: var(--terracotta-dark);
+  }
+  .cell-date.editing { padding: 0; border: none; background: transparent; }
+  .cell-date input {
+    width: 100%; font: inherit; font-size: 10.5px;
+    padding: 2px 3px; border: 1px solid var(--terracotta);
+    border-radius: 4px; background: #fff; color: var(--ink);
+  }
+  .cell-date input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(198,93,61,.25);
+  }
+
+  /* project-level "預計完成" date cell (YYYY-MM-DD) */
+  tbody td.meta-date-cell {
+    padding: 6px 6px; width: 120px;
+  }
+  .meta-date {
+    display: inline-block; min-width: 96px;
+    padding: 5px 8px;
+    font-size: 12px; font-weight: 700;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    background: #fffaf1;
+    color: var(--terracotta);
+    cursor: pointer;
+    font-family: 'Segoe UI', 'Microsoft JhengHei', monospace;
+  }
+  .meta-date.empty { color: #c4b8a6; font-weight: 500; }
+  .meta-date:hover {
+    border-color: var(--terracotta);
+    background: #fff3e6;
+    color: var(--terracotta-dark);
+  }
+  .meta-date.editing { padding: 0; border: none; background: transparent; }
+  .meta-date input {
+    width: 130px; font: inherit; font-size: 12px;
+    padding: 5px 6px; border: 1px solid var(--terracotta);
+    border-radius: 6px; background: #fff; color: var(--ink);
+  }
+  .meta-date input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(198,93,61,.18);
   }
 
   .row-btn {
@@ -349,7 +414,7 @@
 
   <footer>
     Sporton Internal · 資料儲存於 Supabase 雲端資料庫 · Cloud-synced via Supabase
-    · <span style="opacity:.6">build 2026-05-13-a</span>
+    · <span style="opacity:.6">build 2026-05-13-b</span>
   </footer>
 </div>
 
@@ -380,9 +445,10 @@ const META_COLS = [
   { key: 'product', zh: '產品名稱',     en: 'Product',    sortable: true,  edit: true,  cls: '' },
   { key: 'model',   zh: '產品型號',     en: 'Model',      sortable: true,  edit: true,  cls: '' },
   { key: 'sales',   zh: '業務',         en: 'Sales',      sortable: true,  edit: true,  cls: '' },
-  { key: 'sample',  zh: '樣品接收時間', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
-  { key: 'country', zh: '國別',         en: 'Country',    sortable: true,  edit: true,  cls: '' },
-  { key: 'note',    zh: '狀態',         en: 'Status Note',sortable: false, edit: true,  cls: 'notes' }
+  { key: 'sample',   zh: '樣品接收時間', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
+  { key: 'country',  zh: '國別',         en: 'Country',    sortable: true,  edit: true,  cls: '' },
+  { key: 'est_done', zh: '預計完成',     en: 'Est. Done',  sortable: true,  edit: true,  cls: 'meta-date-cell', type: 'date' },
+  { key: 'note',     zh: '狀態',         en: 'Status Note',sortable: false, edit: true,  cls: 'notes' }
 ];
 
 /* Right side – 11 independent test/document status columns from the Excel. */
@@ -405,16 +471,16 @@ const ACTION_COL = { key: '_action', zh: '操作', en: 'Action', sortable: false
 /* Seed data — the five cases present in Project Status.xlsx. */
 const SAMPLE = [
   { no:1, case:'641411',    client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'wifi ok， bt halow 無法一起，setup 要用 winbox',
+    sample:'', country:'', est_done:'', note:'wifi ok， bt halow 無法一起，setup 要用 winbox',
     cells:{}, archived:false },
   { no:2, case:'350940-01', client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
   { no:3, case:'TE622521',  client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
   { no:4, case:'631148',    client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
   { no:5, case:'3N2221-05', client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'', cells:{}, archived:false }
+    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false }
 ];
 
 /* ---------- state ---------- */
@@ -435,15 +501,16 @@ function toDb(r) {
   return {
     id:       r.id,
     no:       r.no,
-    case:     r.case    || '',
-    client:   r.client  || '',
-    product:  r.product || '',
-    model:    r.model   || '',
-    sales:    r.sales   || '',
-    sample:   r.sample  || '',
-    country:  r.country || '',
-    note:     r.note    || '',
-    cells:    r.cells   || {},
+    case:     r.case     || '',
+    client:   r.client   || '',
+    product:  r.product  || '',
+    model:    r.model    || '',
+    sales:    r.sales    || '',
+    sample:   r.sample   || '',
+    country:  r.country  || '',
+    est_done: r.est_done || '',           /* NEW: project-level YYYY-MM-DD */
+    note:     r.note     || '',
+    cells:    r.cells    || {},           /* each cell may now have a .due (YYYY-MM-DD) */
     archived: r.archived || false
   };
 }
@@ -503,13 +570,29 @@ function normalize(arr) {
   return arr.map(r => {
     if (!r.cells) r.cells = {};
     TEST_COLS.forEach(c => {
-      const v = r.cells[c.key];
-      if (v && (!v.status || !validIds.has(v.status))) r.cells[c.key] = null;
-      else if (v == null) r.cells[c.key] = null;
+      let v = r.cells[c.key];
+      if (v && typeof v === 'object') {
+        const status = validIds.has(v.status) ? v.status : null;
+        const due    = isYMD(v.due) ? v.due : '';
+        /* if neither status nor due is meaningful, clear the cell */
+        r.cells[c.key] = (status || due) ? { status, due } : null;
+      } else {
+        r.cells[c.key] = null;
+      }
     });
     if (typeof r.archived !== 'boolean') r.archived = false;
+    if (typeof r.est_done !== 'string') r.est_done = '';
     return r;
   });
+}
+
+/* Date helpers — store ISO (YYYY-MM-DD), display MM/DD for cells, YYYY-MM-DD for project */
+function isYMD(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+function fmtMD(iso) {
+  if (!isYMD(iso)) return '';
+  return iso.slice(5).replace('-', '/');   /* '2026-05-30' -> '05/30' */
 }
 
 const statusById = id => STATUSES.find(s => s.id === id);
@@ -648,7 +731,15 @@ function render() {
   tbody.innerHTML = list.map(r => {
     const metaCells = META_COLS.map(col => {
       const cls = col.cls || '';
-      const text = escapeHtml(r[col.key] == null ? '' : r[col.key]);
+      const raw = r[col.key] == null ? '' : r[col.key];
+      if (col.type === 'date') {
+        const isEmpty = !isYMD(raw);
+        const label = isEmpty ? '— 點此選日期 —' : raw;
+        return `<td class="${cls}" data-no="${r.no}" data-key="${col.key}">
+          <span class="meta-date${isEmpty ? ' empty' : ''}" data-iso="${escapeHtml(raw)}">${escapeHtml(label)}</span>
+        </td>`;
+      }
+      const text = escapeHtml(raw);
       if (col.edit) {
         return `<td class="${cls} editable" contenteditable="true"
                     data-no="${r.no}" data-key="${col.key}">${text}</td>`;
@@ -659,8 +750,12 @@ function render() {
       const cell = r.cells[col.key];
       const cls = cellClass(cell);
       const label = escapeHtml(cellLabel(cell));
+      const iso = (cell && cell.due) || '';
+      const dateLabel = iso ? fmtMD(iso) : '—';
+      const dateEmpty = iso ? '' : ' empty';
       return `<td class="test-cell" data-no="${r.no}" data-key="${col.key}">
         <span class="pill ${cls}">${label}</span>
+        <span class="cell-date${dateEmpty}" data-iso="${escapeHtml(iso)}">${escapeHtml(dateLabel)}</span>
       </td>`;
     }).join('');
     const archiveBtn = r.archived
@@ -688,8 +783,30 @@ function bindRowEvents() {
       }
     });
   });
-  document.querySelectorAll('td.test-cell').forEach(td => {
-    td.addEventListener('click', e => openStatusPop(td, e));
+
+  /* Status pill → status popover (only on the pill itself, NOT the whole cell;
+     so clicks on the date strip below it don't open the status popover). */
+  document.querySelectorAll('td.test-cell .pill').forEach(pill => {
+    pill.addEventListener('click', e => {
+      e.stopPropagation();
+      openStatusPop(pill.closest('td.test-cell'), e);
+    });
+  });
+
+  /* Per-test-item due date (cells.<key>.due) → inline native date picker */
+  document.querySelectorAll('td.test-cell .cell-date').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openInlineDatePicker(el, 'cell');
+    });
+  });
+
+  /* Project-level est_done → inline native date picker */
+  document.querySelectorAll('.meta-date').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openInlineDatePicker(el, 'project');
+    });
   });
   document.querySelectorAll('.row-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -767,13 +884,67 @@ function openStatusPop(td, evt) {
   pop.querySelectorAll('.pop-grid button').forEach(btn => {
     btn.addEventListener('click', () => {
       const sid = btn.dataset.status;
-      r.cells[key] = sid ? { status: sid } : null;
+      const prev = r.cells[key] || null;
+      const due  = (prev && prev.due) || '';
+      /* Preserve any due date the user already picked; clearing status alone
+         keeps the date, clearing both via the Clear button wipes the cell. */
+      if (sid) r.cells[key] = { status: sid, due };
+      else     r.cells[key] = due ? { status: null, due } : null;
       dbUpsert(r); closeStatusPop(); render();
     });
   });
 }
 function closeStatusPop() {
   document.querySelectorAll('.pop, .pop-mask').forEach(el => el.remove());
+}
+
+/* ============================================================
+   Inline native date picker (used for cell.due AND project.est_done)
+   ============================================================ */
+function openInlineDatePicker(el, kind) {
+  if (el.classList.contains('editing')) return;
+  const td = el.closest('td');
+  const no  = +td.dataset.no;
+  const key = td.dataset.key;
+  const r = rows.find(x => x.no === no); if (!r) return;
+
+  const current = el.dataset.iso || '';
+  el.classList.add('editing');
+  el.innerHTML = `<input type="date" value="${escapeHtml(current)}">`;
+  const input = el.querySelector('input');
+  input.focus();
+  try { input.showPicker && input.showPicker(); } catch (_) {}
+
+  let done = false;
+  const commit = async () => {
+    if (done) return; done = true;
+    const v = (input.value || '').trim();    /* YYYY-MM-DD or '' */
+    const iso = isYMD(v) ? v : '';
+
+    if (kind === 'project') {
+      const prev = r.est_done || '';
+      if (iso === prev) { render(); return; }
+      r.est_done = iso;
+      const res = await dbUpsert(r);
+      if (!res.ok) { r.est_done = prev; }
+      render();
+    } else {
+      /* cell-level due — preserve existing status when updating due */
+      const prevCell = r.cells[key] || null;
+      const prevDue  = (prevCell && prevCell.due) || '';
+      if (iso === prevDue) { render(); return; }
+      const status = (prevCell && prevCell.status) || null;
+      r.cells[key] = (status || iso) ? { status, due: iso } : null;
+      const res = await dbUpsert(r);
+      if (!res.ok) { r.cells[key] = prevCell; }
+      render();
+    }
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', evt => {
+    if (evt.key === 'Enter')  { evt.preventDefault(); input.blur(); }
+    if (evt.key === 'Escape') { done = true; render(); }
+  });
 }
 
 /* ============================================================
@@ -793,7 +964,7 @@ document.getElementById('add-row').addEventListener('click', () => {
   const newRow = {
     id: crypto.randomUUID(),
     no: nextNo(), case:'', client:'', product:'', model:'', sales:'',
-    sample:'', country:'', note:'', cells:{}, archived:false
+    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false
   };
   rows.push(newRow);
   dbUpsert(newRow);
