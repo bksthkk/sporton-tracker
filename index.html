@@ -349,6 +349,7 @@
 
   <footer>
     Sporton Internal · 資料儲存於 Supabase 雲端資料庫 · Cloud-synced via Supabase
+    · <span style="opacity:.6">build 2026-05-13-a</span>
   </footer>
 </div>
 
@@ -447,29 +448,52 @@ function toDb(r) {
   };
 }
 
+/* Surface DB errors visibly. Common cause: missing RLS policy on the
+   `projects` table for the operation that just failed. */
+function reportDbError(op, error) {
+  console.error(`[Supabase ${op}]`, error);
+  const hint = (error && (error.code === '42501' || /row-?level security|RLS|policy/i.test(error.message || '')))
+    ? '\n\n可能原因 Likely cause: Supabase 的 `projects` 資料表沒有允許此操作的 RLS Policy。\n請至 Supabase Dashboard → Authentication → Policies，為 projects 新增允許此操作的 policy（或將該表的 RLS 關掉）。'
+    : '';
+  alert(`⚠ Supabase ${op} 失敗 / failed:\n${(error && error.message) || error}${hint}`);
+}
+
 async function dbLoad() {
   const { data, error } = await db.from('projects').select('*').order('no');
-  if (error) { console.error('dbLoad:', error); return []; }
+  if (error) { reportDbError('SELECT', error); return []; }
   return data || [];
 }
 
 async function dbUpsert(r) {
   if (!r.id) r.id = crypto.randomUUID();
   const { error } = await db.from('projects').upsert(toDb(r));
-  if (error) console.error('dbUpsert:', error);
+  if (error) { reportDbError('UPSERT', error); return { ok: false, error }; }
+  return { ok: true };
 }
 
 async function dbDelete(id) {
-  const { error } = await db.from('projects').delete().eq('id', id);
-  if (error) console.error('dbDelete:', error);
+  if (!id) return { ok: false, error: { message: '此筆紀錄沒有 id，可能未存到雲端 / Row has no cloud id.' } };
+  console.log('[dbDelete] sending DELETE for id =', id);
+  const { data, error } = await db.from('projects').delete().eq('id', id).select();
+  console.log('[dbDelete] result:', { data, error });
+  if (error) { reportDbError('DELETE', error); return { ok: false, error }; }
+  /* Supabase returns the deleted rows when .select() is chained.
+     If the array is empty, RLS likely filtered it out silently. */
+  if (!data || data.length === 0) {
+    const err = { message: '刪除指令送出了，但伺服器回報「0 筆受影響」。通常代表 RLS Policy 沒有允許 DELETE。\nServer reported 0 rows affected — usually means your DELETE RLS policy doesn\'t match this row.' };
+    reportDbError('DELETE', err);
+    return { ok: false, error: err };
+  }
+  return { ok: true };
 }
 
 /* Used by CSV import: wipe table then bulk-insert fresh rows. */
 async function dbReplaceAll(newRows) {
-  await db.from('projects').delete().not('id', 'is', null);
+  const { error: delErr } = await db.from('projects').delete().not('id', 'is', null);
+  if (delErr) { reportDbError('DELETE (replace-all)', delErr); return []; }
   const inserts = newRows.map(r => toDb({ ...r, id: crypto.randomUUID() }));
   const { data, error } = await db.from('projects').insert(inserts).select();
-  if (error) { console.error('dbReplaceAll:', error); return inserts; }
+  if (error) { reportDbError('INSERT (replace-all)', error); return []; }
   return data || inserts;
 }
 
@@ -672,15 +696,30 @@ function bindRowEvents() {
       const no  = +btn.dataset.no;
       const act = btn.dataset.act;
       const r = rows.find(x => x.no === no); if (!r) return;
-      if (act === 'archive') {
-        if (!confirm(`封存案號 ${r.case || '(未命名)'}？該專案會移到「封存」頁。\nArchive this project? It will move to the Archive tab.`)) return;
-        r.archived = true; dbUpsert(r); render();
-      } else if (act === 'restore') {
-        r.archived = false; dbUpsert(r); render();
-      } else if (act === 'del') {
-        if (!confirm('確定要永久刪除這筆紀錄嗎？此操作無法復原。\nPermanently delete this row? This cannot be undone.')) return;
-        dbDelete(r.id);
-        rows = rows.filter(x => x.no !== no); render();
+      btn.disabled = true;
+      try {
+        if (act === 'archive') {
+          if (!confirm(`封存案號 ${r.case || '(未命名)'}？該專案會移到「封存」頁。\nArchive this project? It will move to the Archive tab.`)) return;
+          r.archived = true;
+          const res = await dbUpsert(r);
+          if (!res.ok) { r.archived = false; render(); return; }
+          render();
+        } else if (act === 'restore') {
+          r.archived = false;
+          const res = await dbUpsert(r);
+          if (!res.ok) { r.archived = true; render(); return; }
+          render();
+        } else if (act === 'del') {
+          if (!confirm('確定要永久刪除這筆紀錄嗎？此操作無法復原。\nPermanently delete this row? This cannot be undone.')) return;
+          /* Wait for the DB to confirm the row is gone before touching local state.
+             If RLS or anything else blocks the delete, the row stays on screen. */
+          const res = await dbDelete(r.id);
+          if (!res.ok) return;
+          rows = rows.filter(x => x.no !== no);
+          render();
+        }
+      } finally {
+        btn.disabled = false;
       }
     });
   });
@@ -880,13 +919,28 @@ async function init() {
 
   const raw = await dbLoad();
 
-  if (!raw.length) {
-    /* First run: seed with sample data. */
+  /* IMPORTANT: only seed the sample data ONCE, ever — tracked in localStorage.
+     Without this gate, deleting all rows + refresh would re-create the 5
+     sample cases every time, making it look like deletes never persisted. */
+  const SEEDED_KEY = 'sporton_tracker_seeded_v1';
+  const hasSeeded = localStorage.getItem(SEEDED_KEY) === '1';
+
+  if (!raw.length && !hasSeeded) {
+    /* First-ever run: seed with the 5 Excel cases. */
     const seed = JSON.parse(JSON.stringify(SAMPLE)).map(r => ({ ...r, id: crypto.randomUUID() }));
-    const { data } = await db.from('projects').insert(seed.map(toDb)).select();
-    rows = normalize(data || seed);
+    const { data, error } = await db.from('projects').insert(seed.map(toDb)).select();
+    if (error) {
+      reportDbError('INSERT (seed)', error);
+      rows = [];
+    } else {
+      rows = normalize(data || seed);
+      localStorage.setItem(SEEDED_KEY, '1');
+    }
   } else {
     rows = normalize(raw);
+    /* If the DB already had rows when we got here, mark seeded so we never
+       try to re-seed even after the user deletes everything later. */
+    if (raw.length) localStorage.setItem(SEEDED_KEY, '1');
   }
 
   render();
