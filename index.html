@@ -3,611 +3,429 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Project Tracker · Sporton</title>
+<title>Sporton · 專案追蹤 / Project Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root {
-    /* ---------- Liquid Glass material tokens ---------- */
-    --glass-bg:        rgba(255, 255, 255, 0.08);   /* clear, neutral, no tint */
-    --glass-bg-soft:   rgba(255, 255, 255, 0.12);
-    --glass-bg-hover:  rgba(255, 255, 255, 0.14);
-    --glass-frost:     rgba(255, 255, 255, 0.40);   /* sticky table header only — legibility */
-    --glass-edge-lit:  rgba(255, 255, 255, 0.25);   /* top/left refraction edge */
-    --glass-edge-dim:  rgba(255, 255, 255, 0.08);   /* bottom/right shadow edge */
-    --glass-blur:      blur(40px) saturate(180%);
-    --glass-blur-sm:   blur(24px) saturate(180%);
-    --glass-shadow:    0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
-    --glass-sheen:     linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%);
-    --ease:            cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    /* Sporton palette – derived from the source Excel */
+    --header-brown: #8B4513;
+    --terracotta: #c65d3d;
+    --terracotta-dark: #a8462a;
+    --ink: #2b1e17;
+    --ink-2: #4a3a2f;
+    --cream: #fbf6ef;
+    --sand: #f5ede3;
+    --line: #e4d6c7;
+    --muted: #7a6a5f;
 
-    /* ---------- text ---------- */
-    --text:        rgba(20, 20, 20, 0.88);
-    --text-muted:  rgba(0, 0, 0, 0.5);
-    --terracotta:  #C0614A;
-    --terracotta-d:#a8462a;
-
-    /* ---------- legend swatch colours — KEPT: read inline by renderLegend() ---------- */
-    --s-progress-bg:#E8A87C;  --s-progress-fg:#4A2010;
-    --s-ok-bg:      #F2D5B8;  --s-ok-fg:      #4A2010;
-    --s-pending-bg: #E8C9A0;  --s-pending-fg: #4A2010;
-    --s-delay-bg:   #E07040;  --s-delay-fg:   #FFFFFF;
-    --s-fail-bg:    #8B2500;  --s-fail-fg:    #FFF5EE;
-
-    /* ---------- status tint RGB triplets for glass badges ---------- */
-    --s-progress-rgb: 224, 128,  64;
-    --s-ok-rgb:       205, 150,  95;
-    --s-pending-rgb:  212, 158,  78;
-    --s-delay-rgb:    224, 112,  64;
-    --s-fail-rgb:     150,  44,  10;
+    /* The five legend colors – pulled verbatim from Project Status.xlsx */
+    --s-progress-bg:#E8A87C;  --s-progress-fg:#4A2010;  /* 進行中  */
+    --s-ok-bg:      #F2D5B8;  --s-ok-fg:      #4A2010;  /* OK       */
+    --s-pending-bg: #E8C9A0;  --s-pending-fg: #4A2010;  /* Pending  */
+    --s-delay-bg:   #E07040;  --s-delay-fg:   #FFFFFF;  /* Delay    */
+    --s-fail-bg:    #8B2500;  --s-fail-fg:    #FFF5EE;  /* Fail     */
   }
-
   * { box-sizing: border-box; }
-
-  html, body { height: 100%; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-                 "Helvetica Neue", "Microsoft JhengHei", sans-serif;
-    color: var(--text);
+    font-family: "Georgia", "Times New Roman", "Microsoft JhengHei", serif;
+    background: var(--cream);
+    color: var(--ink);
     font-size: 13px;
     line-height: 1.45;
-    min-height: 100%;
-    overflow-x: hidden;                       /* page itself never scrolls sideways */
-    /* ---------- rich, vivid mesh background — glass must show this through ---------- */
-    background:
-      radial-gradient(ellipse 70% 60% at 18% 12%, #e7b69e 0%, transparent 55%),
-      radial-gradient(ellipse 65% 65% at 85% 15%, #9bb5d0 0%, transparent 58%),
-      radial-gradient(ellipse 80% 75% at 78% 88%, #c4b5d4 0%, transparent 60%),
-      radial-gradient(ellipse 75% 70% at 15% 90%, #b8c9a8 0%, transparent 58%),
-      linear-gradient(135deg, #d4a5a0 0%, #9bb5d0 42%, #c4b5d4 70%, #b8c9a8 100%);
-    background-attachment: fixed;
-    background-size: cover;
   }
+  .container { padding: 20px 24px 60px; }
 
-  .container {
-    max-width: 1480px;
-    margin: 0 auto;
-    padding: 32px;
-  }
-
-  /* ============================================================
-     Shared Liquid Glass surface  (panels + modal sheet)
-     ============================================================ */
-  .hero, .tabs, .legend, .toolbar, .table-wrap, footer, .pop {
-    position: relative;
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
-    border-top:    1px solid var(--glass-edge-lit);
-    border-left:   1px solid var(--glass-edge-lit);
-    border-bottom: 1px solid var(--glass-edge-dim);
-    border-right:  1px solid var(--glass-edge-dim);
-    box-shadow: var(--glass-shadow);
-    border-radius: 20px;
-  }
-  /* specular highlight layer */
-  .hero::before, .tabs::before, .legend::before, .toolbar::before,
-  .table-wrap::before, footer::before, .pop::before {
-    content: '';
-    position: absolute; inset: 0;
-    border-radius: inherit;
-    background: var(--glass-sheen);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .hero > *, .tabs > *, .legend > *, .toolbar > *, footer > * { position: relative; z-index: 1; }
-
-  /* ============================================================
-     Header / Hero
-     ============================================================ */
+  /* ---------- Hero ---------- */
   .hero {
     display: flex; align-items: center; justify-content: space-between;
     gap: 24px; flex-wrap: wrap;
-    padding: 24px 28px;
-    margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px; margin-bottom: 16px;
   }
-  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
   .brand-dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--terracotta);
-    box-shadow: 0 0 0 4px rgba(192,97,74,0.18), 0 0 12px rgba(192,97,74,0.5);
+    width: 10px; height: 10px; border-radius: 50%; background: var(--terracotta);
+    box-shadow: 0 0 0 4px rgba(198,93,61,.15);
   }
   .brand-text {
-    color: var(--terracotta);
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--terracotta); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
   }
-  h1 {
-    margin: 6px 0 0;
-    font-size: 40px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: var(--terracotta);
-    text-shadow: 0 2px 16px rgba(192,97,74,0.28),
-                 0 1px 2px rgba(255,255,255,0.45);
-  }
+  h1 { margin: 4px 0 0; font-size: 22px; font-weight: 600; color: var(--ink); }
+  h1 .en { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 6px; }
 
   /* ---------- Summary chips ---------- */
   .summary { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 7px 13px; border-radius: 14px;
-    font-size: 12px; font-weight: 700;
-    color: var(--text);
-    background: rgba(255,255,255,0.14);
-    border-top: 1px solid var(--glass-edge-lit);
-    border-left: 1px solid var(--glass-edge-lit);
-    border-bottom: 1px solid var(--glass-edge-dim);
-    border-right: 1px solid var(--glass-edge-dim);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-    transition: all 0.2s var(--ease);
+    padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    border: 1px solid transparent;
   }
-  .chip .num { font-size: 14px; font-weight: 800; }
-  .chip.total      { background: rgba(255,255,255,0.20); }
-  .chip.s-progress { background: rgba(var(--s-progress-rgb),0.18); border-color: rgba(var(--s-progress-rgb),0.40); }
-  .chip.s-ok       { background: rgba(var(--s-ok-rgb),      0.18); border-color: rgba(var(--s-ok-rgb),      0.40); }
-  .chip.s-pending  { background: rgba(var(--s-pending-rgb), 0.18); border-color: rgba(var(--s-pending-rgb), 0.40); }
-  .chip.s-delay    { background: rgba(var(--s-delay-rgb),   0.20); border-color: rgba(var(--s-delay-rgb),   0.42); }
-  .chip.s-fail     { background: rgba(var(--s-fail-rgb),    0.20); border-color: rgba(var(--s-fail-rgb),    0.42); }
+  .chip .num { font-size: 14px; }
+  .chip.total { background: #fff; color: var(--ink); border-color: var(--line); }
+  .chip.s-progress{ background: var(--s-progress-bg);color: var(--s-progress-fg); }
+  .chip.s-ok      { background: var(--s-ok-bg);      color: var(--s-ok-fg); }
+  .chip.s-pending { background: var(--s-pending-bg); color: var(--s-pending-fg); }
+  .chip.s-delay   { background: var(--s-delay-bg);   color: var(--s-delay-fg); }
+  .chip.s-fail    { background: var(--s-fail-bg);    color: var(--s-fail-fg); }
 
-  /* ============================================================
-     Tabs  (desktop: inline glass bar · mobile: bottom iOS tab bar)
-     ============================================================ */
+  /* ---------- Tabs ---------- */
   .tabs {
-    display: flex; gap: 6px;
-    padding: 8px;
-    margin-bottom: 16px;
+    display: flex; gap: 4px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--line);
   }
   .tab {
-    flex: 0 0 auto;
-    display: inline-flex; align-items: center; gap: 8px;
     background: transparent;
-    border: 1px solid transparent;
-    padding: 10px 20px;
-    font: inherit; font-size: 13px; font-weight: 700;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: 14px;
-    transition: all 0.2s var(--ease);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    padding: 9px 18px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    color: var(--muted); cursor: pointer;
+    margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 8px;
+    position: relative; isolation: isolate;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .tab::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 55%);
+    pointer-events: none;
+    z-index: -1;
   }
   .tab:hover {
     color: var(--terracotta);
-    background: rgba(255,255,255,0.10);
-    transform: translateY(-1px);
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
   .tab.active {
-    color: var(--text);
-    background: rgba(255,255,255,0.18);
-    border-top: 1px solid var(--glass-edge-lit);
-    border-left: 1px solid var(--glass-edge-lit);
-    border-bottom: 1px solid var(--glass-edge-dim);
-    border-right: 1px solid var(--glass-edge-dim);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.08);
+    background: #fff; color: var(--ink);
+    border-color: var(--line); border-bottom-color: #fff;
   }
   .tab .tab-count {
-    background: rgba(255,255,255,0.22);
-    color: var(--text);
-    padding: 2px 9px; border-radius: 999px;
-    font-size: 11px; font-weight: 800;
+    background: var(--sand); color: var(--ink-2);
+    padding: 1px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
   }
-  .tab.active .tab-count {
-    background: rgba(var(--s-delay-rgb),0.55);
-    color: #fff;
-  }
+  .tab.active .tab-count { background: var(--terracotta); color: #fff; }
 
-  /* ============================================================
-     Legend
-     ============================================================ */
+  /* ---------- Legend ---------- */
   .legend {
-    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
-    padding: 12px 16px; margin-bottom: 16px;
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+    padding: 10px 14px; margin-bottom: 12px;
+    background: var(--sand); border: 1px solid var(--line); border-radius: 12px;
     font-size: 12px;
   }
   .legend .l-title {
-    font-weight: 800; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: .14em; font-size: 11px;
+    font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .12em; font-size: 11px;
   }
-  .legend .swatch { display: inline-flex; align-items: center; gap: 7px; color: var(--text); font-weight: 600; }
+  .legend .swatch { display: inline-flex; align-items: center; gap: 6px; }
   .legend .sq {
-    display: inline-block; width: 15px; height: 15px;
-    border-radius: 5px;
-    border: 1px solid rgba(255,255,255,0.4);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+    display: inline-block; width: 16px; height: 16px;
+    border-radius: 4px; border: 1px solid rgba(0,0,0,.1);
   }
 
-  /* ============================================================
-     Toolbar
-     ============================================================ */
+  /* ---------- Toolbar ---------- */
   .toolbar {
     display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-    padding: 14px 16px; margin-bottom: 16px;
+    padding: 12px 14px; margin-bottom: 12px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
   }
   .toolbar input[type=text],
   .toolbar select {
-    padding: 9px 12px;
-    border-radius: 14px;
-    border-top: 1px solid var(--glass-edge-lit);
-    border-left: 1px solid var(--glass-edge-lit);
-    border-bottom: 1px solid var(--glass-edge-dim);
-    border-right: 1px solid var(--glass-edge-dim);
-    background: rgba(255,255,255,0.14);
-    -webkit-backdrop-filter: var(--glass-blur-sm);
-    backdrop-filter: var(--glass-blur-sm);
-    font: inherit; font-size: 12px; color: var(--text);
-    transition: all 0.2s var(--ease);
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; font: inherit; color: var(--ink);
   }
-  .toolbar input[type=text]::placeholder { color: rgba(0,0,0,0.42); }
   .toolbar input[type=text]:focus,
   .toolbar select:focus {
-    outline: none;
-    background: rgba(255,255,255,0.22);
-    border-color: rgba(192,97,74,0.55);
-    box-shadow: 0 0 0 3px rgba(192,97,74,0.18);
+    outline: none; border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(198,93,61,.15);
   }
   .toolbar input.search { min-width: 240px; flex: 1 1 240px; }
   .toolbar label.lbl {
-    font-size: 11px; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: .1em; font-weight: 800;
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em; font-weight: 700;
   }
   .toolbar .spacer { flex: 1 1 auto; }
-
-  /* ---------- Buttons — all liquid glass ---------- */
   .btn {
-    padding: 9px 16px;
-    border-radius: 14px;
-    border-top: 1px solid var(--glass-edge-lit);
-    border-left: 1px solid var(--glass-edge-lit);
-    border-bottom: 1px solid var(--glass-edge-dim);
-    border-right: 1px solid var(--glass-edge-dim);
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: var(--glass-blur-sm);
-    backdrop-filter: var(--glass-blur-sm);
-    color: var(--text);
-    font: inherit; font-size: 12px; font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: all 0.2s var(--ease);
+    padding: 7px 14px; border: 1px solid var(--line); background: #fff;
+    color: var(--ink); border-radius: 8px;
+    font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all .12s;
   }
-  .btn:hover {
-    background: var(--glass-bg-hover);
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.14);
-  }
-  .btn:active {
-    transform: scale(0.98);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 2px 6px rgba(0,0,0,0.12);
-  }
+  .btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
   .btn.primary {
-    background: rgba(192,97,74,0.30);
-    border-top-color: rgba(255,255,255,0.4);
-    border-left-color: rgba(255,255,255,0.4);
-    color: #3a1810;
+    background: var(--terracotta); color: #fff; border-color: var(--terracotta);
   }
-  .btn.primary:hover { background: rgba(192,97,74,0.42); }
+  .btn.primary:hover {
+    background: var(--terracotta-dark); border-color: var(--terracotta-dark); color: #fff;
+  }
 
-  /* ============================================================
-     Table — glass card with a horizontally scrollable interior
-     ============================================================ */
+  /* ---------- Table ---------- */
   .table-wrap {
-    overflow: auto;
-    max-width: 100%;
-    max-height: calc(100vh - 380px);
-    padding: 4px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    overflow: auto; max-height: calc(100vh - 320px);
   }
-  .table-wrap::before { z-index: 0; }
   table {
-    position: relative; z-index: 1;
     width: 100%; border-collapse: separate; border-spacing: 0;
     font-size: 12.5px;
   }
   thead th {
     position: sticky; top: 0; z-index: 3;
-    background: var(--glass-frost);
-    -webkit-backdrop-filter: var(--glass-blur-sm);
-    backdrop-filter: var(--glass-blur-sm);
-    color: var(--text);
-    text-align: center; padding: 11px 8px;
-    font-weight: 800; white-space: nowrap;
-    border-bottom: 1px solid var(--glass-edge-lit);
-    border-right: 1px solid var(--glass-edge-dim);
+    background: var(--header-brown); color: #FFFFFF;
+    text-align: center; padding: 10px 8px;
+    font-weight: 700; white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.12);
+    border-bottom: 2px solid var(--terracotta);
     user-select: none; cursor: pointer;
   }
-  thead th:first-child { border-top-left-radius: 14px; }
-  thead th:last-child  { border-top-right-radius: 14px; }
   thead th.no-sort { cursor: default; }
   thead th .en {
-    display: block; font-weight: 500; font-size: 10.5px;
-    color: var(--text-muted); letter-spacing: .03em; margin-top: 2px;
+    display: block; font-weight: 400; font-size: 10.5px;
+    color: #f0d8c0; letter-spacing: .03em; margin-top: 2px;
   }
-  thead th .arrow { color: var(--terracotta); margin-left: 4px; font-size: 10px; }
+  thead th .arrow { color: #ffd9b8; margin-left: 4px; font-size: 10px; }
+  thead th.test-col { background: var(--header-brown); }
 
   tbody td {
-    padding: 8px;
-    vertical-align: middle; color: var(--text);
-    background: transparent;
+    padding: 8px 8px; border-bottom: 1px solid var(--line);
+    border-right: 1px solid #f1e6d8;
+    vertical-align: middle; color: var(--ink); background: #fff;
     text-align: center; white-space: nowrap;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-    border-right: 1px solid rgba(255,255,255,0.06);
-    transition: background 0.15s var(--ease);
   }
-  tbody tr:hover td { background: rgba(255,255,255,0.07); }
   tbody td.editable:hover {
-    outline: 1.5px solid rgba(192,97,74,0.35); outline-offset: -2px;
-    cursor: text; background: rgba(255,255,255,0.12);
-    border-radius: 8px;
+    outline: 2px solid rgba(198,93,61,.25); outline-offset: -2px; cursor: text;
+    background: #fff7ed;
   }
   tbody td.editable:focus {
     outline: 2px solid var(--terracotta); outline-offset: -2px;
-    background: rgba(255,255,255,0.55);
-    text-align: left; border-radius: 8px;
+    background: #fff !important; text-align: left;
   }
   tbody td.notes {
     min-width: 240px; max-width: 320px;
     white-space: pre-wrap; text-align: left;
   }
-  tbody td.col-no { width: 44px; color: var(--text-muted); }
-  tbody td.col-case { width: 110px; font-weight: 800; text-align: left; }
+  tbody td.col-no { width: 44px; color: var(--muted); }
+  tbody td.col-case { width: 110px; font-weight: 700; text-align: left; }
   tbody td.col-action { width: 108px; white-space: nowrap; }
   tbody td.col-action .row-btn + .row-btn { margin-left: 4px; }
 
-  /* ---------- test-status cell ---------- */
+  /* test-status cell */
   tbody td.test-cell {
-    padding: 4px; width: 92px;
-    cursor: default; position: relative;
+    padding: 4px;
+    width: 92px;
+    cursor: default;
+    position: relative;
   }
-  /* status badge — tinted translucent glass (sits on the frosted table card) */
   .pill {
     display: block; width: 100%;
-    padding: 6px 4px;
-    border-radius: 14px;
+    padding: 5px 4px;
+    border-radius: 6px;
     font-size: 11.5px; font-weight: 700;
     text-align: center;
-    color: var(--text);
-    background: rgba(255,255,255,0.10);
-    border: 1px solid var(--glass-edge-lit);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+    border: 1px solid transparent;
+    color: var(--muted);
     cursor: pointer;
-    transition: all 0.2s var(--ease);
   }
-  .pill.empty { color: var(--text-muted); font-weight: 500; background: rgba(255,255,255,0.06); }
-  .pill.s-progress { background: rgba(var(--s-progress-rgb),0.22); border-color: rgba(var(--s-progress-rgb),0.50); }
-  .pill.s-ok       { background: rgba(var(--s-ok-rgb),      0.22); border-color: rgba(var(--s-ok-rgb),      0.50); }
-  .pill.s-pending  { background: rgba(var(--s-pending-rgb), 0.22); border-color: rgba(var(--s-pending-rgb), 0.50); }
-  .pill.s-delay    { background: rgba(var(--s-delay-rgb),   0.26); border-color: rgba(var(--s-delay-rgb),   0.55); }
-  .pill.s-fail     { background: rgba(var(--s-fail-rgb),    0.24); border-color: rgba(var(--s-fail-rgb),    0.52); }
+  .pill.empty {
+    background: #faf2e6; border-color: var(--line); color: #b8a896;
+    font-weight: 500;
+  }
+  .pill.s-progress{ background: var(--s-progress-bg);color: var(--s-progress-fg); }
+  .pill.s-ok      { background: var(--s-ok-bg);      color: var(--s-ok-fg); }
+  .pill.s-pending { background: var(--s-pending-bg); color: var(--s-pending-fg); }
+  .pill.s-delay   { background: var(--s-delay-bg);   color: var(--s-delay-fg); }
+  .pill.s-fail    { background: var(--s-fail-bg);    color: var(--s-fail-fg); }
   .pill:hover {
-    background: var(--glass-bg-hover);
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.3);
-  }
-  .pill:active {
-    transform: scale(0.98);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 2px 5px rgba(0,0,0,0.14);
+    box-shadow: 0 0 0 2px rgba(198,93,61,.35);
   }
 
-  /* ---------- per-test-item due date chip (MM/DD) ---------- */
+  /* small "due date" pill under each test-status pill (MM/DD) */
   .cell-date {
     display: block; width: 100%;
-    margin-top: 4px;
-    padding: 3px 4px;
-    font-size: 10.5px; font-weight: 700;
+    margin-top: 3px;
+    padding: 2px 4px;
+    font-size: 10.5px; font-weight: 600;
     text-align: center;
-    border: 1px solid var(--glass-edge-lit);
-    border-radius: 10px;
-    background: rgba(255,255,255,0.10);
-    color: var(--terracotta-d);
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+    background: #fffaf1;
+    color: var(--terracotta);
     cursor: pointer;
-    transition: all 0.2s var(--ease);
+    font-family: 'Segoe UI', 'Microsoft JhengHei', monospace;
   }
-  .cell-date.empty { color: var(--text-muted); font-weight: 500; }
+  .cell-date.empty { color: #c4b8a6; font-weight: 500; }
   .cell-date:hover {
-    background: var(--glass-bg-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+    border-color: var(--terracotta);
+    background: #fff3e6;
+    color: var(--terracotta-dark);
   }
-  .cell-date.editing { padding: 0; border: none; background: transparent; transform: none; box-shadow: none; }
+  .cell-date.editing { padding: 0; border: none; background: transparent; }
   .cell-date input {
     width: 100%; font: inherit; font-size: 10.5px;
-    padding: 3px; border: 1px solid var(--terracotta);
-    border-radius: 8px; background: rgba(255,255,255,0.85); color: var(--text);
+    padding: 2px 3px; border: 1px solid var(--terracotta);
+    border-radius: 4px; background: #fff; color: var(--ink);
   }
-  .cell-date input:focus { outline: none; box-shadow: 0 0 0 2px rgba(192,97,74,0.22); }
+  .cell-date input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(198,93,61,.25);
+  }
 
-  /* ---------- project-level "預計完成" date chip (YYYY-MM-DD) ---------- */
-  tbody td.meta-date-cell { padding: 6px; width: 130px; }
+  /* project-level "預計完成" date cell (YYYY-MM-DD) */
+  tbody td.meta-date-cell {
+    padding: 6px 6px; width: 120px;
+  }
   .meta-date {
-    display: inline-block; min-width: 104px;
-    padding: 6px 10px;
-    font-size: 12px; font-weight: 800;
+    display: inline-block; min-width: 96px;
+    padding: 5px 8px;
+    font-size: 12px; font-weight: 700;
     text-align: center;
-    border: 1px solid var(--glass-edge-lit);
-    border-radius: 14px;
-    background: rgba(255,255,255,0.12);
-    color: var(--terracotta-d);
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    background: #fffaf1;
+    color: var(--terracotta);
     cursor: pointer;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
-    transition: all 0.2s var(--ease);
+    font-family: 'Segoe UI', 'Microsoft JhengHei', monospace;
   }
-  .meta-date.empty { color: var(--text-muted); font-weight: 500; }
+  .meta-date.empty { color: #c4b8a6; font-weight: 500; }
   .meta-date:hover {
-    background: var(--glass-bg-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    border-color: var(--terracotta);
+    background: #fff3e6;
+    color: var(--terracotta-dark);
   }
-  .meta-date.editing { padding: 0; border: none; background: transparent; transform: none; box-shadow: none; }
+  .meta-date.editing { padding: 0; border: none; background: transparent; }
   .meta-date input {
-    width: 140px; font: inherit; font-size: 12px;
-    padding: 6px 8px; border: 1px solid var(--terracotta);
-    border-radius: 12px; background: rgba(255,255,255,0.85); color: var(--text);
+    width: 130px; font: inherit; font-size: 12px;
+    padding: 5px 6px; border: 1px solid var(--terracotta);
+    border-radius: 6px; background: #fff; color: var(--ink);
   }
-  .meta-date input:focus { outline: none; box-shadow: 0 0 0 3px rgba(192,97,74,0.18); }
+  .meta-date input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(198,93,61,.18);
+  }
 
-  /* ---------- row action buttons ---------- */
   .row-btn {
-    background: rgba(255,255,255,0.10);
-    border: 1px solid var(--glass-edge-lit);
-    color: var(--text-muted);
-    padding: 5px 9px; border-radius: 10px;
-    font: inherit; font-size: 11px; font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s var(--ease);
+    background: transparent; border: 1px solid var(--line);
+    color: var(--muted); padding: 4px 8px; border-radius: 6px;
+    font: inherit; font-size: 11px; cursor: pointer;
   }
-  .row-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.12); }
-  .row-btn.archive:hover { background: rgba(192,97,74,0.18); border-color: rgba(192,97,74,0.5); color: var(--terracotta-d); }
-  .row-btn.restore:hover { background: rgba(74,138,85,0.18); border-color: rgba(74,138,85,0.5); color: #2f6b3a; }
-  .row-btn.del:hover     { background: rgba(var(--s-fail-rgb),0.18); border-color: rgba(var(--s-fail-rgb),0.5); color: #6e2305; }
-  .row-btn:disabled { opacity: .5; cursor: default; transform: none; }
+  .row-btn:hover {
+    border-color: var(--terracotta); color: var(--terracotta);
+  }
+  .row-btn.archive:hover {
+    background: rgba(198,93,61,.08);
+    border-color: var(--terracotta); color: var(--terracotta);
+  }
+  .row-btn.restore:hover {
+    background: rgba(74,160,80,.08);
+    border-color: #4a8a55; color: #2f6b3a;
+  }
+  .row-btn.del:hover {
+    background: rgba(139,37,0,.08);
+    border-color: var(--s-fail-bg); color: var(--s-fail-bg);
+  }
 
   .empty-row td {
-    padding: 36px; text-align: center;
-    color: var(--text-muted); font-style: italic;
+    padding: 30px; text-align: center;
+    color: var(--muted); font-style: italic;
   }
-
-  /* ============================================================
-     Footer
-     ============================================================ */
   footer {
-    margin-top: 18px;
-    padding: 14px 18px;
-    color: var(--text-muted);
+    margin-top: 16px; color: var(--muted);
     font-size: 11px; text-align: center;
   }
 
-  /* ============================================================
-     Status popover — liquid glass modal sheet
-     ============================================================ */
+  /* ---------- Status popover ---------- */
   .pop-mask {
-    position: fixed; inset: 0; z-index: 50;
-    background: rgba(0,0,0,0.04);
-    -webkit-backdrop-filter: blur(3px);
-    backdrop-filter: blur(3px);
+    position: fixed; inset: 0; z-index: 50; background: transparent;
   }
   .pop {
     position: absolute; z-index: 51;
-    width: 220px;                     /* KEPT: openStatusPop() positions against 220 */
-    padding: 14px;
-    border-radius: 28px;              /* modal sheet radius */
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    width: 220px;
   }
-  .pop > * { position: relative; z-index: 1; }
   .pop h4 {
-    margin: 0 0 10px; font-size: 11px; font-weight: 800;
-    color: var(--text-muted); letter-spacing: .12em; text-transform: uppercase;
+    margin: 0 0 8px; font-size: 11px; font-weight: 700;
+    color: var(--muted); letter-spacing: .12em; text-transform: uppercase;
   }
   .pop-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;
   }
   .pop-grid button {
-    padding: 9px 4px; border-radius: 14px;
+    padding: 7px 4px; border-radius: 6px;
     font: inherit; font-size: 11.5px; font-weight: 700;
-    color: var(--text);
-    background: rgba(255,255,255,0.12);
-    border: 1px solid var(--glass-edge-lit);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
-    cursor: pointer; text-align: center;
-    transition: all 0.2s var(--ease);
+    border: 1px solid transparent; cursor: pointer; text-align: center;
   }
-  .pop-grid button.s-progress { background: rgba(var(--s-progress-rgb),0.22); border-color: rgba(var(--s-progress-rgb),0.50); }
-  .pop-grid button.s-ok       { background: rgba(var(--s-ok-rgb),      0.22); border-color: rgba(var(--s-ok-rgb),      0.50); }
-  .pop-grid button.s-pending  { background: rgba(var(--s-pending-rgb), 0.22); border-color: rgba(var(--s-pending-rgb), 0.50); }
-  .pop-grid button.s-delay    { background: rgba(var(--s-delay-rgb),   0.26); border-color: rgba(var(--s-delay-rgb),   0.55); }
-  .pop-grid button.s-fail     { background: rgba(var(--s-fail-rgb),    0.24); border-color: rgba(var(--s-fail-rgb),    0.52); }
-  .pop-grid button:hover {
-    background: var(--glass-bg-hover);
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.16);
-  }
-  .pop-grid button:active {
-    transform: scale(0.98);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 2px 6px rgba(0,0,0,0.14);
-  }
-  .pop-grid button.current {
-    box-shadow: 0 0 0 2px var(--terracotta), inset 0 1px 0 rgba(255,255,255,0.3);
-  }
+  .pop-grid button.s-progress{ background: var(--s-progress-bg);color: var(--s-progress-fg); }
+  .pop-grid button.s-ok      { background: var(--s-ok-bg);      color: var(--s-ok-fg); }
+  .pop-grid button.s-pending { background: var(--s-pending-bg); color: var(--s-pending-fg); }
+  .pop-grid button.s-delay   { background: var(--s-delay-bg);   color: var(--s-delay-fg); }
+  .pop-grid button.s-fail    { background: var(--s-fail-bg);    color: var(--s-fail-fg); }
+  .pop-grid button:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
   .pop-grid button.clear {
     grid-column: 1 / -1;
-    background: rgba(255,255,255,0.06);
-    border: 1px dashed var(--glass-edge-lit);
-    color: var(--text-muted);
+    background: #fff; color: var(--muted); border: 1px dashed var(--line);
   }
-  .pop-grid button.clear:hover { color: var(--text); background: rgba(255,255,255,0.12); }
+  .pop-grid button.clear:hover { color: var(--ink); border-color: var(--muted); }
 
   /* ============================================================
-     Animations  (respect prefers-reduced-motion)
+     Liquid glass — applied to ALL buttons: status-counter chips,
+     tab buttons, action buttons, stage pills, row buttons and the
+     filter dropdowns. ADDITIVE — every button keeps its own
+     background colour; the 15% white overlay + specular sheen are
+     carried by ::before at z-index:-1, so they sit ABOVE each
+     button's own background but BELOW its (un-wrapped) text. The
+     <select> elements can't render ::before, so the dropdowns get
+     the white overlay via background-image instead.
      ============================================================ */
-  @media (prefers-reduced-motion: no-preference) {
-    @keyframes glass-rise {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes glass-fade {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    .hero       { animation: glass-rise 0.4s var(--ease) both; }
-    .tabs       { animation: glass-rise 0.4s var(--ease) 0.08s both; }
-    .legend     { animation: glass-rise 0.4s var(--ease) 0.16s both; }
-    .toolbar    { animation: glass-rise 0.4s var(--ease) 0.24s both; }
-    .table-wrap { animation: glass-rise 0.4s var(--ease) 0.32s both; }
-    footer      { animation: glass-rise 0.4s var(--ease) 0.40s both; }
-    .pop        { animation: glass-fade 0.3s ease-out both; }
-    tbody tr    { animation: glass-fade 0.28s var(--ease) both; }
+  .chip, .tab, .btn, .pill, .row-btn, .toolbar select {
+    -webkit-backdrop-filter: blur(10px) saturate(150%);
+    backdrop-filter: blur(10px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .chip::before, .tab::before, .btn::before, .pill::before, .row-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, transparent 55%),
+      rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .toolbar select {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15));
+  }
+  .chip:hover, .tab:hover, .btn:hover, .row-btn:hover, .toolbar select:hover {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .pill:hover {   /* small stage buttons (EMS, RF, EP …) — slightly reduced pop */
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .chip:active, .tab:active, .btn:active, .pill:active, .row-btn:active, .toolbar select:active {
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
-  /* ============================================================
-     Responsive — Desktop ≥1024 · Tablet 768–1023 · Mobile ≤767
-     ============================================================ */
-
-  /* Tablet */
-  @media (max-width: 1023px) {
-    .container { padding: 24px; }
-    h1 { font-size: 34px; }
-    .table-wrap { max-height: calc(100vh - 420px); }
-  }
-
-  /* Mobile */
-  @media (max-width: 767px) {
-    .container { padding: 16px 16px 110px; }   /* room for fixed bottom nav */
-    .hero {
-      flex-direction: column; align-items: flex-start;
-      padding: 18px 18px;
-    }
-    h1 { font-size: 28px; }
-    .summary { gap: 6px; }
-
-    .toolbar { padding: 12px; }
-    .toolbar input.search { flex: 1 1 100%; min-width: 0; width: 100%; }
-    .toolbar select { flex: 1 1 calc(50% - 5px); }
-    .btn {
-      flex: 1 1 calc(50% - 5px);
-      min-height: 44px;                        /* iOS touch target */
-    }
-
-    .table-wrap { max-height: calc(100vh - 320px); }
-
-    /* legend horizontally scrollable so it never forces page width */
-    .legend { flex-wrap: nowrap; overflow-x: auto; }
-
-    /* Tabs become a fixed iOS-style bottom glass tab bar */
-    .tabs {
-      position: fixed;
-      left: 12px; right: 12px; bottom: 12px;
-      z-index: 40;
-      height: 72px;
-      margin: 0;
-      padding: 8px;
-      border-radius: 24px;
-      gap: 8px;
-    }
-    .tab {
-      flex: 1 1 0;
-      justify-content: center;
-      min-height: 48px;                        /* touch target */
-      border-radius: 18px;
-    }
-  }
-
-  @media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
-    .tabs { animation: glass-fade 0.4s var(--ease) 0.08s both; }
+  @media (max-width: 1100px) {
+    .hero { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -663,7 +481,7 @@
 
   <footer>
     Sporton Internal · 資料儲存於 Supabase 雲端資料庫 · Cloud-synced via Supabase
-    · <span style="opacity:.6">build 2026-05-13-c</span>
+    · <span style="opacity:.6">build 2026-05-13-b</span>
   </footer>
 </div>
 
