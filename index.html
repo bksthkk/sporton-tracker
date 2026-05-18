@@ -456,7 +456,7 @@
 
   <div class="toolbar">
     <input type="text" class="search" id="search"
-           placeholder="搜尋 Search · 案號 / 客戶 / 產品名稱 / 業務" />
+           placeholder="搜尋 Search · 案號 / 業務" />
     <label class="lbl">狀態 Status</label>
     <select id="status-filter">
       <option value="">全部 All</option>
@@ -508,9 +508,6 @@ const STATUSES = [
 const META_COLS = [
   { key: 'no',      zh: '編號',         en: 'No.',        sortable: true,  edit: false, cls: 'col-no' },
   { key: 'case',    zh: '案號',         en: 'Case No.',   sortable: true,  edit: true,  cls: 'col-case' },
-  { key: 'client',  zh: '客戶',         en: 'Client',     sortable: true,  edit: true,  cls: '' },
-  { key: 'product', zh: '產品名稱',     en: 'Product',    sortable: true,  edit: true,  cls: '' },
-  { key: 'model',   zh: '產品型號',     en: 'Model',      sortable: true,  edit: true,  cls: '' },
   { key: 'sales',   zh: '業務',         en: 'Sales',      sortable: true,  edit: true,  cls: '' },
   { key: 'sample',   zh: '樣品接收時間', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
   { key: 'country',  zh: '國別',         en: 'Country',    sortable: true,  edit: true,  cls: '' },
@@ -537,16 +534,16 @@ const ACTION_COL = { key: '_action', zh: '操作', en: 'Action', sortable: false
 
 /* Seed data — the five cases present in Project Status.xlsx. */
 const SAMPLE = [
-  { no:1, case:'641411',    client:'', product:'', model:'', sales:'',
+  { no:1, case:'641411',    sales:'',
     sample:'', country:'', est_done:'', note:'wifi ok， bt halow 無法一起，setup 要用 winbox',
     cells:{}, archived:false },
-  { no:2, case:'350940-01', client:'', product:'', model:'', sales:'',
+  { no:2, case:'350940-01', sales:'',
     sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
-  { no:3, case:'TE622521',  client:'', product:'', model:'', sales:'',
+  { no:3, case:'TE622521',  sales:'',
     sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
-  { no:4, case:'631148',    client:'', product:'', model:'', sales:'',
+  { no:4, case:'631148',    sales:'',
     sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
-  { no:5, case:'3N2221-05', client:'', product:'', model:'', sales:'',
+  { no:5, case:'3N2221-05', sales:'',
     sample:'', country:'', est_done:'', note:'', cells:{}, archived:false }
 ];
 
@@ -569,9 +566,6 @@ function toDb(r) {
     id:       r.id,
     no:       r.no,
     case:     r.case     || '',
-    client:   r.client   || '',
-    product:  r.product  || '',
-    model:    r.model    || '',
     sales:    r.sales    || '',
     sample:   r.sample   || '',
     country:  r.country  || '',
@@ -755,7 +749,7 @@ function visibleRows() {
   if (searchTerm) {
     const t = searchTerm.toLowerCase();
     list = list.filter(r =>
-      ['case','client','product','model','sales','country','note']
+      ['case','sales','country','note']
         .some(k => String(r[k]||'').toLowerCase().includes(t))
     );
   }
@@ -1030,7 +1024,7 @@ document.getElementById('add-row').addEventListener('click', () => {
   if (view !== 'active') view = 'active';
   const newRow = {
     id: crypto.randomUUID(),
-    no: nextNo(), case:'', client:'', product:'', model:'', sales:'',
+    no: nextNo(), case:'', sales:'',
     sample:'', country:'', est_done:'', note:'', cells:{}, archived:false
   };
   rows.push(newRow);
