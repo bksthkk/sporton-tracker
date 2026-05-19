@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sporton · 專案追蹤 / Project Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+  /* Pre-paint check: if a non-expired Supabase auth token exists in
+     localStorage, add .authed to <html> so logged-in users don't see
+     the login overlay flash. The main script will re-verify via
+     supabase.auth.getSession() once it boots. */
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+        const obj = JSON.parse(localStorage.getItem(k) || 'null');
+        if (obj && obj.expires_at && obj.expires_at * 1000 > Date.now()) {
+          document.documentElement.classList.add('authed');
+          break;
+        }
+      }
+    }
+    /* Clean up old frontend-only auth flag — no longer used. */
+    localStorage.removeItem('sporton_tracker_auth_v1');
+  } catch (e) {}
+</script>
 <style>
   :root {
     /* Sporton palette – derived from the source Excel */
@@ -424,12 +445,114 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
+  /* ============================================================
+     Password protection — login overlay
+     ⚠ Frontend-only: deters casual viewing but is NOT real security.
+     Anyone with dev tools can read the password from the source,
+     bypass the localStorage check, or hit Supabase directly with the
+     public anon key. For genuine access control use Supabase Auth + RLS.
+     ============================================================ */
+  .container { display: none; }
+  html.authed .container { display: block; }
+  html.authed #login-overlay { display: none; }
+  #login-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cream);
+    padding: 24px;
+  }
+  .login-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 36px 32px 28px;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.10);
+    text-align: center;
+  }
+  .login-card .brand-dot {
+    display: inline-block;
+    margin: 0 auto 14px;
+  }
+  .login-card .brand-text {
+    display: block; margin-bottom: 6px;
+  }
+  .login-card h2 {
+    margin: 0 0 8px;
+    font-size: 26px; font-weight: 700;
+    color: var(--terracotta);
+    letter-spacing: -0.01em;
+  }
+  .login-subtitle {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 12px; line-height: 1.55;
+  }
+  .login-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit; font-size: 14px;
+    color: var(--ink);
+    background: #fff;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+  }
+  .login-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(198,93,61,.18);
+  }
+  .login-error {
+    min-height: 18px;
+    font-size: 12px; color: var(--s-fail-bg);
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+  .login-btn {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--terracotta); color: #fff;
+    border: 1px solid var(--terracotta);
+    border-radius: 8px;
+    font: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .login-btn:hover {
+    background: var(--terracotta-dark); border-color: var(--terracotta-dark);
+  }
+  .login-btn:active { transform: scale(0.98); }
+
   @media (max-width: 1100px) {
     .hero { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
 <body>
+
+<div id="login-overlay">
+  <div class="login-card">
+    <span class="brand-dot"></span>
+    <span class="brand-text">Sporton International</span>
+    <h2>Project Tracker</h2>
+    <p class="login-subtitle">
+      請以授權帳號登入<br>
+      Sign in with your authorised account
+    </p>
+    <input type="email" id="login-email" class="login-input"
+           placeholder="Email" autocomplete="email"
+           autocapitalize="none" spellcheck="false"
+           aria-label="Email" />
+    <input type="password" id="login-pw" class="login-input"
+           placeholder="Password" autocomplete="current-password"
+           aria-label="Password" />
+    <div class="login-error" id="login-error" role="alert"></div>
+    <button class="login-btn" id="login-btn">Sign In</button>
+  </div>
+</div>
+
 <div class="container">
 
   <header class="hero">
@@ -469,6 +592,7 @@
     <button class="btn primary" id="add-row">+ 新增 Add</button>
     <button class="btn" id="export-csv">⬇ 匯出 Export CSV</button>
     <button class="btn" id="import-csv">⬆ 匯入 Import CSV</button>
+    <button class="btn" id="logout-btn" title="登出 Logout">⎋ 登出 Logout</button>
     <input type="file" id="file-input" accept=".csv" hidden />
   </div>
 
@@ -491,9 +615,15 @@
    Data layer: Supabase (replaces localStorage)
    ============================================================ */
 
-const SUPABASE_URL = 'https://ynidxlgvnbiygpybafmm.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InluaWR4bGd2bmJpeWdweWJhZm1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MjU2NzksImV4cCI6MjA5NDEwMTY3OX0.muGk19RMx1qH3TXlmSs-VhSX3YsRzcYvElmmTaj3LuQ';
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* Credentials come from config.js (gitignored locally; written by the
+   GitHub Actions deploy workflow from repository secrets at deploy time).
+   Note: the anon key is *meant* to be public — Supabase's threat model
+   relies on Row Level Security policies, not on key secrecy. */
+if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+  alert('Configuration missing. config.js did not load — check that it exists locally or that the GitHub Actions deploy secrets are set.');
+  throw new Error('Missing Supabase config');
+}
+const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 /* The five statuses from the Excel legend row. */
 const STATUSES = [
@@ -1178,7 +1308,95 @@ async function init() {
   render();
 }
 
-init();
+/* ============================================================
+   Authentication — Supabase Email + Password (real auth, RLS-backed)
+   The data itself is locked down by RLS policies on the `projects`
+   table; the UI auth here just exists for UX. Sessions are managed
+   by supabase-js (JWT in localStorage; auto-refresh).
+   ============================================================ */
+
+function setAuthed(yes) {
+  document.documentElement.classList.toggle('authed', yes);
+}
+
+async function attemptLogin() {
+  const emailEl = document.getElementById('login-email');
+  const pwEl    = document.getElementById('login-pw');
+  const errEl   = document.getElementById('login-error');
+  const btn     = document.getElementById('login-btn');
+
+  const email    = emailEl.value.trim();
+  const password = pwEl.value;
+  if (!email || !password) {
+    errEl.textContent = 'Please enter both email and password.';
+    return;
+  }
+
+  btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (error || !data || !data.session) {
+      /* Supabase returns "Invalid login credentials" for both
+         wrong-email and wrong-password — don't leak which. */
+      errEl.textContent = (error && error.message) || 'Login failed. Please try again.';
+      pwEl.value = '';
+      pwEl.focus();
+      return;
+    }
+    pwEl.value = '';
+    setAuthed(true);
+    init();
+  } catch (e) {
+    errEl.textContent = 'Unexpected error: ' + ((e && e.message) || e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function logout() {
+  try { await db.auth.signOut(); } catch (e) { console.warn('signOut error:', e); }
+  setAuthed(false);
+  closeStatusPop();
+  rows = [];
+  const emailEl = document.getElementById('login-email');
+  const pwEl    = document.getElementById('login-pw');
+  const errEl   = document.getElementById('login-error');
+  if (pwEl)    pwEl.value = '';
+  if (errEl)   errEl.textContent = '';
+  if (emailEl) emailEl.focus();
+}
+
+document.getElementById('login-btn').addEventListener('click', attemptLogin);
+document.getElementById('login-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); attemptLogin(); }
+});
+document.getElementById('login-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('login-pw').focus(); }
+});
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+/* React to session loss (token refresh failed, signOut from another tab,
+   server-side revocation, etc.) by sending the user back to login. */
+db.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') {
+    setAuthed(false);
+    rows = [];
+    closeStatusPop();
+  }
+});
+
+/* ---------- boot ---------- */
+(async function boot() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    setAuthed(true);
+    init();
+  } else {
+    setAuthed(false);
+    document.getElementById('login-email').focus();
+  }
+})();
 </script>
 </body>
 </html>

@@ -12,3 +12,16 @@ desktop.ini
 # Logs / temp
 *.log
 *.tmp
+
+# Local Supabase credentials — generated from secrets at deploy time
+# (see .github/workflows/deploy.yml). config.example.js is the committed template.
+config.js
+.env
+.env.local
+.env.*.local
+
+# Claude Code session metadata
+.claude/
+
+# Local stray editor copies (never commit duplicates of index.html)
+*[Cc]opy*.html
