@@ -524,6 +524,145 @@
     background: var(--terracotta-dark); border-color: var(--terracotta-dark);
   }
   .login-btn:active { transform: scale(0.98); }
+  .login-btn:disabled { opacity: .65; cursor: default; }
+
+  /* ============================================================
+     MFA — challenge step + warning banner + enrollment modal
+     ============================================================ */
+  /* Show only ONE card inside #login-overlay at a time. */
+  .login-card[hidden] { display: none !important; }
+
+  /* Big spaced-out monospace input for 6-digit codes */
+  .mfa-code-input {
+    font-size: 22px; letter-spacing: 0.4em;
+    text-align: center;
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+    padding: 14px;
+  }
+  /* "← Back" link on the MFA step */
+  .login-back-btn {
+    display: block; margin: 12px auto 0;
+    background: transparent; border: none;
+    color: var(--muted); cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600;
+    padding: 6px 10px;
+  }
+  .login-back-btn:hover { color: var(--terracotta); }
+
+  /* Spinner inside the verify button */
+  .btn-spinner {
+    display: inline-block;
+    width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+    vertical-align: -2px;
+    margin-left: 8px;
+  }
+  .btn-spinner[hidden] { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Yellow MFA-not-enabled warning banner inside the dashboard */
+  .mfa-banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; margin-bottom: 14px;
+    background: #fff8d8;
+    border: 1px solid #e5c84a;
+    border-left: 4px solid #d49b00;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #5a4500;
+    font-weight: 600;
+  }
+  .mfa-banner[hidden] { display: none !important; }
+  .mfa-banner-icon { font-size: 18px; flex: 0 0 auto; }
+  .mfa-banner-text { flex: 1; line-height: 1.45; font-weight: 500; }
+  .mfa-banner-text strong { color: #4a3500; }
+  .mfa-banner-actions { display: flex; gap: 6px; flex: 0 0 auto; align-items: center; }
+  .mfa-banner-close {
+    background: transparent; border: none; cursor: pointer;
+    font-size: 22px; color: #8a6900;
+    padding: 2px 8px;
+    line-height: 1;
+  }
+  .mfa-banner-close:hover { color: var(--ink); }
+
+  /* MFA enrollment overlay (modal sheet) */
+  #mfa-enroll-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 14, 10, 0.55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    padding: 24px;
+  }
+  #mfa-enroll-overlay[hidden] { display: none !important; }
+  .mfa-enroll-card {
+    background: #fff; border-radius: 18px;
+    border: 1px solid var(--line);
+    padding: 26px 28px 22px;
+    width: 100%; max-width: 440px;
+    text-align: center;
+    box-shadow: 0 28px 70px rgba(0,0,0,0.28);
+  }
+  .mfa-enroll-card h3 {
+    margin: 0 0 10px;
+    font-size: 20px; font-weight: 700;
+    color: var(--terracotta);
+  }
+  .mfa-enroll-step {
+    color: var(--muted); font-size: 12.5px;
+    line-height: 1.55; margin: 0 0 6px;
+  }
+  .mfa-enroll-qr {
+    margin: 14px auto; width: 200px; height: 200px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .mfa-enroll-qr img,
+  .mfa-enroll-qr svg { width: 100%; height: 100%; display: block; }
+  .mfa-enroll-secret-row {
+    font-size: 11px; color: var(--muted); margin: 6px 0 14px;
+    line-height: 1.6;
+  }
+  .mfa-enroll-secret-row code {
+    background: var(--sand);
+    padding: 3px 8px; border-radius: 4px;
+    font-family: "Courier New", monospace;
+    font-size: 11px; letter-spacing: 0.06em;
+    color: var(--ink);
+    user-select: all;
+    word-break: break-all;
+  }
+  .mfa-enroll-input {
+    width: 100%; box-sizing: border-box;
+    padding: 12px; margin: 0 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 22px; letter-spacing: 0.4em;
+    text-align: center;
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+  }
+  .mfa-enroll-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(198,93,61,.18);
+  }
+  .mfa-enroll-error {
+    min-height: 18px;
+    color: var(--s-fail-bg); font-size: 12px;
+    font-weight: 700; margin-bottom: 8px;
+  }
+  .mfa-enroll-actions {
+    display: flex; gap: 8px; margin-top: 6px;
+  }
+  .mfa-enroll-actions .btn { flex: 1; }
 
   @media (max-width: 1100px) {
     .hero { flex-direction: column; align-items: flex-start; }
@@ -533,7 +672,9 @@
 <body>
 
 <div id="login-overlay">
-  <div class="login-card">
+
+  <!-- Step 1: email + password -->
+  <div class="login-card" id="login-card-credentials">
     <span class="brand-dot"></span>
     <span class="brand-text">Sporton International</span>
     <h2>Project Tracker</h2>
@@ -551,9 +692,47 @@
     <div class="login-error" id="login-error" role="alert"></div>
     <button class="login-btn" id="login-btn">Sign In</button>
   </div>
+
+  <!-- Step 2: TOTP MFA challenge (shown only when account has MFA enrolled) -->
+  <div class="login-card" id="login-card-mfa" hidden>
+    <span class="brand-dot"></span>
+    <span class="brand-text">Two-Factor Authentication</span>
+    <h2>Verify it's you</h2>
+    <p class="login-subtitle">
+      請開啟驗證器 App 取得 6 位數驗證碼<br>
+      Open your authenticator app to get the code
+    </p>
+    <input type="text" id="mfa-code"
+           class="login-input mfa-code-input"
+           inputmode="numeric" pattern="\d{6}" maxlength="6"
+           autocomplete="one-time-code"
+           placeholder="••••••"
+           aria-label="6-digit code" />
+    <div class="login-error" id="mfa-error" role="alert"></div>
+    <button class="login-btn" id="mfa-verify-btn">
+      <span class="btn-label">Verify</span>
+      <span class="btn-spinner" hidden aria-hidden="true"></span>
+    </button>
+    <button class="login-back-btn" id="mfa-back-btn" type="button">← Back</button>
+  </div>
+
 </div>
 
 <div class="container">
+
+  <div id="mfa-warning" class="mfa-banner" hidden>
+    <span class="mfa-banner-icon" aria-hidden="true">⚠️</span>
+    <div class="mfa-banner-text">
+      <strong>Your account is not MFA-protected.</strong>
+      建議啟用兩步驟驗證以提升安全性。
+      Enable MFA for stronger security.
+    </div>
+    <div class="mfa-banner-actions">
+      <button class="btn" id="enable-mfa-btn">Enable MFA</button>
+      <button class="mfa-banner-close" id="mfa-warning-dismiss"
+              type="button" title="Dismiss" aria-label="Dismiss">×</button>
+    </div>
+  </div>
 
   <header class="hero">
     <div>
@@ -607,6 +786,36 @@
     Sporton Internal · 資料儲存於 Supabase 雲端資料庫 · Cloud-synced via Supabase
     · <span style="opacity:.6">build 2026-05-13-b</span>
   </footer>
+</div>
+
+<!-- MFA enrollment modal (opens from the warning banner's "Enable MFA" button) -->
+<div id="mfa-enroll-overlay" hidden>
+  <div class="mfa-enroll-card">
+    <h3>Enable Two-Factor Authentication</h3>
+    <p class="mfa-enroll-step">
+      使用驗證器 App 掃描下方 QR Code (例如 Google Authenticator、Authy、1Password)<br>
+      Scan the QR code below with your authenticator app
+      (Google Authenticator, Authy, 1Password…)
+    </p>
+    <div class="mfa-enroll-qr" id="mfa-enroll-qr"></div>
+    <p class="mfa-enroll-secret-row">
+      Or enter manually: <code id="mfa-enroll-secret">...</code>
+    </p>
+    <p class="mfa-enroll-step">
+      Then enter the 6-digit code shown in your app:
+    </p>
+    <input type="text" id="mfa-enroll-code"
+           class="mfa-enroll-input"
+           inputmode="numeric" pattern="\d{6}" maxlength="6"
+           autocomplete="one-time-code"
+           placeholder="••••••"
+           aria-label="6-digit code" />
+    <div class="mfa-enroll-error" id="mfa-enroll-error" role="alert"></div>
+    <div class="mfa-enroll-actions">
+      <button class="btn" id="mfa-enroll-cancel" type="button">Cancel</button>
+      <button class="btn primary" id="mfa-enroll-verify" type="button">Verify &amp; Enable</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1309,14 +1518,32 @@ async function init() {
 }
 
 /* ============================================================
-   Authentication — Supabase Email + Password (real auth, RLS-backed)
-   The data itself is locked down by RLS policies on the `projects`
-   table; the UI auth here just exists for UX. Sessions are managed
-   by supabase-js (JWT in localStorage; auto-refresh).
+   Authentication — Supabase Email+Password + TOTP MFA
+   - Password sign-in puts the session at aal1.
+   - If the user has any verified MFA factor, we step up to aal2
+     via challenge() + verify() before showing the dashboard.
+   - RLS policies on `projects` enforce aal2 for users with MFA
+     factors (see SQL provided alongside this change); the UI
+     enforcement here is the user-friendly layer on top.
    ============================================================ */
+
+let mfaChallenge = null;          /* { factorId, challengeId } during login MFA step  */
+let pendingEnrollFactor = null;   /* factorId of an in-progress enrollment            */
 
 function setAuthed(yes) {
   document.documentElement.classList.toggle('authed', yes);
+}
+function showCredentialsStep() {
+  document.getElementById('login-card-credentials').hidden = false;
+  document.getElementById('login-card-mfa').hidden = true;
+}
+function showMfaStep() {
+  document.getElementById('login-card-credentials').hidden = true;
+  document.getElementById('login-card-mfa').hidden = false;
+  setTimeout(() => {
+    const el = document.getElementById('mfa-code');
+    if (el) el.focus();
+  }, 30);
 }
 
 async function attemptLogin() {
@@ -1331,22 +1558,19 @@ async function attemptLogin() {
     errEl.textContent = 'Please enter both email and password.';
     return;
   }
-
   btn.disabled = true;
   errEl.textContent = '';
   try {
     const { data, error } = await db.auth.signInWithPassword({ email, password });
     if (error || !data || !data.session) {
-      /* Supabase returns "Invalid login credentials" for both
-         wrong-email and wrong-password — don't leak which. */
       errEl.textContent = (error && error.message) || 'Login failed. Please try again.';
       pwEl.value = '';
       pwEl.focus();
       return;
     }
     pwEl.value = '';
-    setAuthed(true);
-    init();
+    /* Decide: dashboard immediately, or step up to MFA first? */
+    await routeAfterAuth();
   } catch (e) {
     errEl.textContent = 'Unexpected error: ' + ((e && e.message) || e);
   } finally {
@@ -1354,18 +1578,233 @@ async function attemptLogin() {
   }
 }
 
+/* Branch based on Assurance Level. Used both after password sign-in
+   AND on boot (when we reopen a tab that had a half-authenticated
+   aal1 session). */
+async function routeAfterAuth() {
+  const { data: aal, error: aalErr } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalErr) {
+    /* AAL lookup failed — fall back to opening the dashboard. RLS
+       still gates the data, so this is safe-ish. */
+    console.warn('mfa AAL lookup failed:', aalErr);
+    finishLogin();
+    return;
+  }
+  if (aal && aal.nextLevel === 'aal2' && aal.currentLevel === 'aal1') {
+    await startMfaChallenge();
+  } else {
+    finishLogin();
+  }
+}
+
+async function startMfaChallenge() {
+  const loginErr = document.getElementById('login-error');
+  const { data: factorsData, error: lErr } = await db.auth.mfa.listFactors();
+  if (lErr) {
+    loginErr.textContent = 'MFA lookup error: ' + lErr.message;
+    showCredentialsStep();
+    return;
+  }
+  const verified = (factorsData && factorsData.totp || []).find(f => f.status === 'verified');
+  if (!verified) {
+    /* Shouldn't happen if nextLevel=aal2, but be defensive. */
+    loginErr.textContent = 'MFA configuration inconsistent. Please contact admin.';
+    try { await db.auth.signOut(); } catch {}
+    showCredentialsStep();
+    return;
+  }
+  const { data: ch, error: cErr } = await db.auth.mfa.challenge({ factorId: verified.id });
+  if (cErr) {
+    loginErr.textContent = 'MFA challenge error: ' + cErr.message;
+    showCredentialsStep();
+    return;
+  }
+  mfaChallenge = { factorId: verified.id, challengeId: ch.id };
+  document.getElementById('mfa-error').textContent = '';
+  document.getElementById('mfa-code').value = '';
+  showMfaStep();
+}
+
+async function verifyMfaCode() {
+  if (!mfaChallenge) return;
+  const codeEl  = document.getElementById('mfa-code');
+  const errEl   = document.getElementById('mfa-error');
+  const btn     = document.getElementById('mfa-verify-btn');
+  const spinner = btn.querySelector('.btn-spinner');
+  const label   = btn.querySelector('.btn-label');
+
+  const code = (codeEl.value || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    errEl.textContent = 'Please enter the 6-digit code from your authenticator app.';
+    return;
+  }
+  btn.disabled = true; spinner.hidden = false; label.textContent = 'Verifying';
+  errEl.textContent = '';
+  try {
+    const { error } = await db.auth.mfa.verify({
+      factorId:    mfaChallenge.factorId,
+      challengeId: mfaChallenge.challengeId,
+      code
+    });
+    if (error) {
+      errEl.textContent = 'Invalid code. Please try again.';
+      codeEl.value = '';
+      codeEl.focus();
+      return;
+    }
+    /* Verified — session is now aal2 and unlocks the RLS gate. */
+    mfaChallenge = null;
+    codeEl.value = '';
+    finishLogin();
+  } finally {
+    btn.disabled = false; spinner.hidden = true; label.textContent = 'Verify';
+  }
+}
+
+async function mfaBack() {
+  /* Cancel the MFA step → sign out so the half-authenticated aal1
+     session doesn't linger, and return to credentials. */
+  mfaChallenge = null;
+  try { await db.auth.signOut(); } catch {}
+  document.getElementById('mfa-code').value = '';
+  document.getElementById('mfa-error').textContent = '';
+  document.getElementById('login-pw').value = '';
+  showCredentialsStep();
+  setTimeout(() => {
+    const el = document.getElementById('login-email');
+    if (el) el.focus();
+  }, 30);
+}
+
+function finishLogin() {
+  setAuthed(true);
+  showCredentialsStep();     /* reset login overlay back to step 1 for next time */
+  init();
+  updateMfaBanner();
+}
+
 async function logout() {
   try { await db.auth.signOut(); } catch (e) { console.warn('signOut error:', e); }
+  mfaChallenge = null;
   setAuthed(false);
   closeStatusPop();
   rows = [];
+  showCredentialsStep();
+  ['login-pw', 'mfa-code'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['login-error', 'mfa-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
   const emailEl = document.getElementById('login-email');
-  const pwEl    = document.getElementById('login-pw');
-  const errEl   = document.getElementById('login-error');
-  if (pwEl)    pwEl.value = '';
-  if (errEl)   errEl.textContent = '';
   if (emailEl) emailEl.focus();
+  const banner = document.getElementById('mfa-warning');
+  if (banner) banner.hidden = true;
 }
+
+/* ---------- MFA enrollment (one-time setup from the warning banner) ---------- */
+
+async function startMfaEnroll() {
+  const overlay = document.getElementById('mfa-enroll-overlay');
+  const qrEl    = document.getElementById('mfa-enroll-qr');
+  const secEl   = document.getElementById('mfa-enroll-secret');
+  const errEl   = document.getElementById('mfa-enroll-error');
+  const codeEl  = document.getElementById('mfa-enroll-code');
+  errEl.textContent = '';
+  codeEl.value = '';
+  qrEl.innerHTML  = '<span style="color:var(--muted);font-size:12px">Generating…</span>';
+  secEl.textContent = '...';
+  overlay.hidden = false;
+
+  /* Clean up any earlier unverified factor before starting a new one. */
+  try {
+    const { data: list } = await db.auth.mfa.listFactors();
+    const stale = (list && list.totp || []).find(f => f.status === 'unverified');
+    if (stale) { try { await db.auth.mfa.unenroll({ factorId: stale.id }); } catch {} }
+  } catch {}
+
+  const { data, error } = await db.auth.mfa.enroll({
+    factorType:   'totp',
+    friendlyName: 'Sporton Tracker · ' + new Date().toISOString().slice(0, 10)
+  });
+  if (error || !data) {
+    errEl.textContent = 'Enroll error: ' + ((error && error.message) || 'unknown');
+    qrEl.innerHTML = '';
+    return;
+  }
+  pendingEnrollFactor = data.id;
+  const qr = (data.totp && data.totp.qr_code) || '';
+  if (qr.startsWith('data:')) {
+    qrEl.innerHTML = '<img src="' + qr + '" alt="MFA QR code">';
+  } else if (qr) {
+    qrEl.innerHTML = qr;       /* inline SVG markup */
+  } else {
+    qrEl.innerHTML = '<span style="color:var(--muted);font-size:12px">No QR returned</span>';
+  }
+  secEl.textContent = (data.totp && data.totp.secret) || '';
+  setTimeout(() => codeEl.focus(), 30);
+}
+
+async function verifyMfaEnroll() {
+  const codeEl = document.getElementById('mfa-enroll-code');
+  const errEl  = document.getElementById('mfa-enroll-error');
+  const btn    = document.getElementById('mfa-enroll-verify');
+  const code = (codeEl.value || '').trim();
+  if (!pendingEnrollFactor) {
+    errEl.textContent = 'No pending enrollment. Please close and try again.';
+    return;
+  }
+  if (!/^\d{6}$/.test(code)) {
+    errEl.textContent = 'Please enter the 6-digit code from your authenticator app.';
+    return;
+  }
+  btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    const { error } = await db.auth.mfa.challengeAndVerify({
+      factorId: pendingEnrollFactor, code
+    });
+    if (error) {
+      errEl.textContent = 'Invalid code. Please try again.';
+      codeEl.value = '';
+      codeEl.focus();
+      return;
+    }
+    /* Verified — factor is now active AND the current session is
+       upgraded to aal2, so no logout/relogin is needed right now. */
+    pendingEnrollFactor = null;
+    document.getElementById('mfa-enroll-overlay').hidden = true;
+    updateMfaBanner();
+    alert('MFA enabled. From now on you\'ll be asked for a code at every sign-in.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cancelMfaEnroll() {
+  if (pendingEnrollFactor) {
+    try { await db.auth.mfa.unenroll({ factorId: pendingEnrollFactor }); } catch (e) { console.warn(e); }
+    pendingEnrollFactor = null;
+  }
+  document.getElementById('mfa-enroll-overlay').hidden = true;
+}
+
+async function updateMfaBanner() {
+  const banner = document.getElementById('mfa-warning');
+  if (!banner) return;
+  try {
+    const { data, error } = await db.auth.mfa.listFactors();
+    if (error) { banner.hidden = true; return; }
+    const hasVerified = (data && data.totp || []).some(f => f.status === 'verified');
+    banner.hidden = hasVerified;
+  } catch {
+    banner.hidden = true;
+  }
+}
+
+/* ---------- Event wiring ---------- */
 
 document.getElementById('login-btn').addEventListener('click', attemptLogin);
 document.getElementById('login-pw').addEventListener('keydown', e => {
@@ -1374,28 +1813,47 @@ document.getElementById('login-pw').addEventListener('keydown', e => {
 document.getElementById('login-email').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('login-pw').focus(); }
 });
+document.getElementById('mfa-verify-btn').addEventListener('click', verifyMfaCode);
+document.getElementById('mfa-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); verifyMfaCode(); }
+});
+document.getElementById('mfa-back-btn').addEventListener('click', mfaBack);
+
 document.getElementById('logout-btn').addEventListener('click', logout);
 
-/* React to session loss (token refresh failed, signOut from another tab,
-   server-side revocation, etc.) by sending the user back to login. */
+document.getElementById('enable-mfa-btn').addEventListener('click', startMfaEnroll);
+document.getElementById('mfa-warning-dismiss').addEventListener('click', () => {
+  document.getElementById('mfa-warning').hidden = true;
+});
+document.getElementById('mfa-enroll-verify').addEventListener('click', verifyMfaEnroll);
+document.getElementById('mfa-enroll-cancel').addEventListener('click', cancelMfaEnroll);
+document.getElementById('mfa-enroll-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); verifyMfaEnroll(); }
+});
+
+/* React to session loss (refresh-token failure, signOut from another
+   tab, server-side revocation, etc.) — send the user back to login. */
 db.auth.onAuthStateChange((event) => {
   if (event === 'SIGNED_OUT') {
     setAuthed(false);
     rows = [];
     closeStatusPop();
+    const banner = document.getElementById('mfa-warning');
+    if (banner) banner.hidden = true;
   }
 });
 
 /* ---------- boot ---------- */
 (async function boot() {
   const { data: { session } } = await db.auth.getSession();
-  if (session) {
-    setAuthed(true);
-    init();
-  } else {
+  if (!session) {
     setAuthed(false);
+    showCredentialsStep();
     document.getElementById('login-email').focus();
+    return;
   }
+  /* Session exists — but it might be aal1 needing MFA step-up. */
+  await routeAfterAuth();
 })();
 </script>
 </body>
