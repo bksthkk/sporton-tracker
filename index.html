@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sporton · 專案追蹤 / Project Tracker</title>
+<title>Sporton · Project Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
@@ -40,7 +40,7 @@
     --muted: #7a6a5f;
 
     /* The five legend colors – pulled verbatim from Project Status.xlsx */
-    --s-progress-bg:#E8A87C;  --s-progress-fg:#4A2010;  /* 進行中  */
+    --s-progress-bg:#E8A87C;  --s-progress-fg:#4A2010;  /* In Progress */
     --s-ok-bg:      #F2D5B8;  --s-ok-fg:      #4A2010;  /* OK       */
     --s-pending-bg: #E8C9A0;  --s-pending-fg: #4A2010;  /* Pending  */
     --s-delay-bg:   #E07040;  --s-delay-fg:   #FFFFFF;  /* Delay    */
@@ -300,7 +300,7 @@
     box-shadow: 0 0 0 2px rgba(198,93,61,.25);
   }
 
-  /* project-level "預計完成" date cell (YYYY-MM-DD) */
+  /* project-level "Est. Done" date cell (YYYY-MM-DD) */
   tbody td.meta-date-cell {
     padding: 6px 6px; width: 120px;
   }
@@ -664,6 +664,58 @@
   }
   .mfa-enroll-actions .btn { flex: 1; }
 
+  /* ============================================================
+     To Do Next — per-row button, at-a-glance dot, and modal
+     ============================================================ */
+  tbody td.col-todo { width: 52px; }
+  .todo-btn {
+    position: relative;
+    background: #fffaf1; border: 1px solid var(--line);
+    color: var(--terracotta); border-radius: 8px;
+    padding: 4px 9px; font-size: 14px; line-height: 1;
+    cursor: pointer; transition: all .15s;
+  }
+  .todo-btn:hover { border-color: var(--terracotta); background: #fff3e6; }
+  .todo-btn.has-todo { background: #ffe9d6; border-color: var(--terracotta); }
+  .todo-ico { display: inline-block; }
+  .todo-dot {
+    display: none;
+    position: absolute; top: -3px; right: -3px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--terracotta); border: 1.5px solid #fff;
+  }
+  .todo-btn.has-todo .todo-dot { display: block; }
+
+  #todo-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 14, 10, 0.55);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    padding: 24px;
+  }
+  #todo-overlay[hidden] { display: none !important; }
+  .todo-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 18px;
+    padding: 24px 26px 20px; width: 100%; max-width: 460px;
+    box-shadow: 0 28px 70px rgba(0,0,0,0.28);
+  }
+  .todo-card h3 {
+    margin: 0 0 4px; font-size: 18px; font-weight: 700; color: var(--terracotta);
+  }
+  .todo-sub { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+  .todo-textarea {
+    width: 100%; box-sizing: border-box; min-height: 150px; resize: vertical;
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 13px; line-height: 1.5; color: var(--ink);
+    background: #fffaf1;
+  }
+  .todo-textarea:focus {
+    outline: none; border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(198,93,61,.15);
+  }
+  .todo-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .todo-actions .btn { min-width: 92px; }
+
   @media (max-width: 1100px) {
     .hero { flex-direction: column; align-items: flex-start; }
   }
@@ -679,7 +731,6 @@
     <span class="brand-text">Sporton International</span>
     <h2>Project Tracker</h2>
     <p class="login-subtitle">
-      請以授權帳號登入<br>
       Sign in with your authorised account
     </p>
     <input type="email" id="login-email" class="login-input"
@@ -699,7 +750,6 @@
     <span class="brand-text">Two-Factor Authentication</span>
     <h2>Verify it's you</h2>
     <p class="login-subtitle">
-      請開啟驗證器 App 取得 6 位數驗證碼<br>
       Open your authenticator app to get the code
     </p>
     <input type="text" id="mfa-code"
@@ -724,7 +774,6 @@
     <span class="mfa-banner-icon" aria-hidden="true">⚠️</span>
     <div class="mfa-banner-text">
       <strong>Your account is not MFA-protected.</strong>
-      建議啟用兩步驟驗證以提升安全性。
       Enable MFA for stronger security.
     </div>
     <div class="mfa-banner-actions">
@@ -747,10 +796,10 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-view="active">
-      現行專案 Active <span class="tab-count" id="count-active">0</span>
+      Active <span class="tab-count" id="count-active">0</span>
     </button>
     <button class="tab" data-view="archive">
-      封存 Archive <span class="tab-count" id="count-archive">0</span>
+      Archive <span class="tab-count" id="count-archive">0</span>
     </button>
   </nav>
 
@@ -758,20 +807,20 @@
 
   <div class="toolbar">
     <input type="text" class="search" id="search"
-           placeholder="搜尋 Search · 案號 / 業務" />
-    <label class="lbl">狀態 Status</label>
+           placeholder="Search · Case No. / Sales" />
+    <label class="lbl">Status</label>
     <select id="status-filter">
-      <option value="">全部 All</option>
+      <option value="">All</option>
     </select>
-    <label class="lbl">項目 Item</label>
+    <label class="lbl">Item</label>
     <select id="item-filter">
-      <option value="">全部 All</option>
+      <option value="">All</option>
     </select>
     <span class="spacer"></span>
-    <button class="btn primary" id="add-row">+ 新增 Add</button>
-    <button class="btn" id="export-csv">⬇ 匯出 Export CSV</button>
-    <button class="btn" id="import-csv">⬆ 匯入 Import CSV</button>
-    <button class="btn" id="logout-btn" title="登出 Logout">⎋ 登出 Logout</button>
+    <button class="btn primary" id="add-row">+ Add</button>
+    <button class="btn" id="export-csv">⬇ Export CSV</button>
+    <button class="btn" id="import-csv">⬆ Import CSV</button>
+    <button class="btn" id="logout-btn" title="Logout">⎋ Logout</button>
     <input type="file" id="file-input" accept=".csv" hidden />
   </div>
 
@@ -789,7 +838,6 @@
   <div class="mfa-enroll-card">
     <h3>Enable Two-Factor Authentication</h3>
     <p class="mfa-enroll-step">
-      使用驗證器 App 掃描下方 QR Code (例如 Google Authenticator、Authy、1Password)<br>
       Scan the QR code below with your authenticator app
       (Google Authenticator, Authy, 1Password…)
     </p>
@@ -814,9 +862,23 @@
   </div>
 </div>
 
+<!-- To Do Next modal (opens from the ✎ button in each project row) -->
+<div id="todo-overlay" hidden>
+  <div class="todo-card">
+    <h3>To Do Next</h3>
+    <p class="todo-sub" id="todo-sub">Case —</p>
+    <textarea id="todo-text" class="todo-textarea"
+              placeholder="Write the next actions for this project…"></textarea>
+    <div class="todo-actions">
+      <button class="btn" id="todo-cancel" type="button">Cancel</button>
+      <button class="btn primary" id="todo-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
-   Sporton 專案追蹤 / Project Tracker
+   Sporton Project Tracker
    Data layer: Supabase (replaces localStorage)
    ============================================================ */
 
@@ -832,7 +894,7 @@ const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 /* The five statuses from the Excel legend row. */
 const STATUSES = [
-  { id: 'progress', label: '進行中',  en: 'In Progress', cls: 's-progress' },
+  { id: 'progress', label: 'In Progress', en: 'In Progress', cls: 's-progress' },
   { id: 'ok',       label: 'OK',      en: 'OK',          cls: 's-ok' },
   { id: 'pending',  label: 'Pending', en: 'Pending',     cls: 's-pending' },
   { id: 'delay',    label: 'Delay',   en: 'Delay',       cls: 's-delay' },
@@ -841,13 +903,13 @@ const STATUSES = [
 
 /* Left side – text / metadata columns. */
 const META_COLS = [
-  { key: 'no',      zh: '編號',         en: 'No.',        sortable: true,  edit: false, cls: 'col-no' },
-  { key: 'case',    zh: '案號',         en: 'Case No.',   sortable: true,  edit: true,  cls: 'col-case' },
-  { key: 'sales',   zh: '業務',         en: 'Sales',      sortable: true,  edit: true,  cls: '' },
-  { key: 'sample',   zh: '樣品接收時間', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
-  { key: 'country',  zh: '國別',         en: 'Country',    sortable: true,  edit: true,  cls: '' },
-  { key: 'est_done', zh: '預計完成',     en: 'Est. Done',  sortable: true,  edit: true,  cls: 'meta-date-cell', type: 'date' },
-  { key: 'note',     zh: '狀態',         en: 'Status Note',sortable: false, edit: true,  cls: 'notes' }
+  { key: 'no',      zh: 'No.',         en: 'No.',        sortable: true,  edit: false, cls: 'col-no' },
+  { key: 'case',    zh: 'Case No.',    en: 'Case No.',   sortable: true,  edit: true,  cls: 'col-case' },
+  { key: 'sales',   zh: 'Sales',       en: 'Sales',      sortable: true,  edit: true,  cls: '' },
+  { key: 'sample',   zh: 'Sample Recv', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
+  { key: 'country',  zh: 'Country',     en: 'Country',    sortable: true,  edit: true,  cls: '' },
+  { key: 'est_done', zh: 'Est. Done',   en: 'Est. Done',  sortable: true,  edit: true,  cls: 'meta-date-cell', type: 'date' },
+  { key: 'note',     zh: 'Status Note', en: 'Status Note',sortable: false, edit: true,  cls: 'notes' }
 ];
 
 /* Right side – 11 independent test/document status columns from the Excel. */
@@ -865,21 +927,22 @@ const TEST_COLS = [
   { key: 'cer',   zh: 'CER',   en: 'Cer' }
 ];
 
-const ACTION_COL = { key: '_action', zh: '操作', en: 'Action', sortable: false, cls: 'col-action no-sort' };
+const ACTION_COL = { key: '_action', zh: 'Action', en: 'Action', sortable: false, cls: 'col-action no-sort' };
+const TODO_COL   = { key: '_todo',   zh: 'To Do',  en: 'To Do',  sortable: false, cls: 'col-todo no-sort' };
 
 /* Seed data — the five cases present in Project Status.xlsx. */
 const SAMPLE = [
   { no:1, case:'641411',    sales:'',
-    sample:'', country:'', est_done:'', note:'wifi ok， bt halow 無法一起，setup 要用 winbox',
+    sample:'', country:'', est_done:'', note:'', todo:'',
     cells:{}, archived:false },
   { no:2, case:'350940-01', sales:'',
-    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
   { no:3, case:'TE622521',  sales:'',
-    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
   { no:4, case:'631148',    sales:'',
-    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false },
+    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
   { no:5, case:'3N2221-05', sales:'',
-    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false }
+    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false }
 ];
 
 /* ---------- state ---------- */
@@ -904,8 +967,9 @@ function toDb(r) {
     sales:    r.sales    || '',
     sample:   r.sample   || '',
     country:  r.country  || '',
-    est_done: r.est_done || '',           /* NEW: project-level YYYY-MM-DD */
+    est_done: r.est_done || '',           /* project-level YYYY-MM-DD */
     note:     r.note     || '',
+    todo:     r.todo     || '',           /* "To Do Next" free-text note */
     cells:    r.cells    || {},           /* each cell may now have a .due (YYYY-MM-DD) */
     archived: r.archived || false
   };
@@ -916,9 +980,9 @@ function toDb(r) {
 function reportDbError(op, error) {
   console.error(`[Supabase ${op}]`, error);
   const hint = (error && (error.code === '42501' || /row-?level security|RLS|policy/i.test(error.message || '')))
-    ? '\n\n可能原因 Likely cause: Supabase 的 `projects` 資料表沒有允許此操作的 RLS Policy。\n請至 Supabase Dashboard → Authentication → Policies，為 projects 新增允許此操作的 policy（或將該表的 RLS 關掉）。'
+    ? '\n\nLikely cause: the `projects` table has no RLS policy allowing this operation. In the Supabase Dashboard, go to Authentication → Policies and add a policy allowing it (or disable RLS on that table).'
     : '';
-  alert(`⚠ Supabase ${op} 失敗 / failed:\n${(error && error.message) || error}${hint}`);
+  alert(`⚠ Supabase ${op} failed:\n${(error && error.message) || error}${hint}`);
 }
 
 async function dbLoad() {
@@ -935,7 +999,7 @@ async function dbUpsert(r) {
 }
 
 async function dbDelete(id) {
-  if (!id) return { ok: false, error: { message: '此筆紀錄沒有 id，可能未存到雲端 / Row has no cloud id.' } };
+  if (!id) return { ok: false, error: { message: 'Row has no cloud id.' } };
   console.log('[dbDelete] sending DELETE for id =', id);
   const { data, error } = await db.from('projects').delete().eq('id', id).select();
   console.log('[dbDelete] result:', { data, error });
@@ -943,7 +1007,7 @@ async function dbDelete(id) {
   /* Supabase returns the deleted rows when .select() is chained.
      If the array is empty, RLS likely filtered it out silently. */
   if (!data || data.length === 0) {
-    const err = { message: '刪除指令送出了，但伺服器回報「0 筆受影響」。通常代表 RLS Policy 沒有允許 DELETE。\nServer reported 0 rows affected — usually means your DELETE RLS policy doesn\'t match this row.' };
+    const err = { message: 'Server reported 0 rows affected — usually means your DELETE RLS policy doesn\'t match this row.' };
     reportDbError('DELETE', err);
     return { ok: false, error: err };
   }
@@ -978,6 +1042,7 @@ function normalize(arr) {
     });
     if (typeof r.archived !== 'boolean') r.archived = false;
     if (typeof r.est_done !== 'string') r.est_done = '';
+    if (typeof r.todo !== 'string') r.todo = '';
     return r;
   });
 }
@@ -1018,33 +1083,33 @@ function cellLabel(cell) {
    ============================================================ */
 function renderLegend() {
   const el = document.getElementById('legend');
-  el.innerHTML = `<span class="l-title">狀態色票 Status Legend</span>` +
+  el.innerHTML = `<span class="l-title">Status Legend</span>` +
     STATUSES.map(s =>
       `<span class="swatch">
          <span class="sq" style="background:var(--${s.cls}-bg)"></span>
-         ${escapeHtml(s.label)} <span style="color:var(--muted)">${escapeHtml(s.en)}</span>
+         ${escapeHtml(s.label)}
        </span>`
     ).join('');
 }
 
 function renderFilters() {
   const sf = document.getElementById('status-filter');
-  sf.innerHTML = `<option value="">全部 All</option>` +
+  sf.innerHTML = `<option value="">All</option>` +
     STATUSES.map(s => `<option value="${s.id}" ${statusFilter===s.id?'selected':''}>${escapeHtml(s.label)}</option>`).join('');
   const ifl = document.getElementById('item-filter');
-  ifl.innerHTML = `<option value="">全部 All</option>` +
+  ifl.innerHTML = `<option value="">All</option>` +
     TEST_COLS.map(c => `<option value="${c.key}" ${itemFilter===c.key?'selected':''}>${escapeHtml(c.zh)}</option>`).join('');
 }
 
 function renderHead() {
   const tr = document.getElementById('head-row');
-  const allCols = [...META_COLS, ...TEST_COLS.map(c => ({ ...c, sortable: false, cls: 'test-col no-sort' })), ACTION_COL];
+  const allCols = [...META_COLS, ...TEST_COLS.map(c => ({ ...c, sortable: false, cls: 'test-col no-sort' })), TODO_COL, ACTION_COL];
   tr.innerHTML = allCols.map(col => {
     const arrow = col.sortable && sortKey === col.key
       ? `<span class="arrow">${sortDir === 'asc' ? '▲' : '▼'}</span>` : '';
     const cls = (col.cls || '') + (col.sortable ? '' : ' no-sort');
     return `<th class="${cls}" data-key="${col.key}">
-      ${escapeHtml(col.zh)}${arrow}<span class="en">${escapeHtml(col.en)}</span>
+      ${escapeHtml(col.zh)}${arrow}
     </th>`;
   }).join('');
   tr.querySelectorAll('th').forEach(th => {
@@ -1068,7 +1133,7 @@ function renderSummary() {
     if (v && v.status) counts[v.status] = (counts[v.status] || 0) + 1;
   }));
   const sum = document.getElementById('summary');
-  const label = view === 'archive' ? '封存 Archived' : '案件 Cases';
+  const label = view === 'archive' ? 'Archived' : 'Cases';
   const parts = [`<span class="chip total"><span class="num">${scoped.length}</span> ${label}</span>`];
   STATUSES.forEach(s => {
     parts.push(`<span class="chip ${s.cls}"><span class="num">${counts[s.id]}</span> ${escapeHtml(s.label)}</span>`);
@@ -1119,9 +1184,9 @@ function render() {
 
   const tbody = document.getElementById('tbody');
   const list = visibleRows();
-  const totalCols = META_COLS.length + TEST_COLS.length + 1;
+  const totalCols = META_COLS.length + TEST_COLS.length + 2;
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="${totalCols}">沒有符合的紀錄 — 試試調整搜尋或篩選 · No matching records</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${totalCols}">No matching records</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(r => {
@@ -1130,7 +1195,7 @@ function render() {
       const raw = r[col.key] == null ? '' : r[col.key];
       if (col.type === 'date') {
         const isEmpty = !isYMD(raw);
-        const label = isEmpty ? '— 點此選日期 —' : raw;
+        const label = isEmpty ? '— Select date —' : raw;
         return `<td class="${cls}" data-no="${r.no}" data-key="${col.key}">
           <span class="meta-date${isEmpty ? ' empty' : ''}" data-iso="${escapeHtml(raw)}">${escapeHtml(label)}</span>
         </td>`;
@@ -1155,10 +1220,12 @@ function render() {
       </td>`;
     }).join('');
     const archiveBtn = r.archived
-      ? `<button class="row-btn restore" data-act="restore" data-no="${r.no}" title="還原 Restore">還原</button>`
-      : `<button class="row-btn archive" data-act="archive" data-no="${r.no}" title="封存 Archive">封存</button>`;
-    const action = `<td class="col-action">${archiveBtn}<button class="row-btn del" data-act="del" data-no="${r.no}" title="刪除 Delete">刪除</button></td>`;
-    return `<tr data-no="${r.no}">${metaCells}${testCells}${action}</tr>`;
+      ? `<button class="row-btn restore" data-act="restore" data-no="${r.no}" title="Restore">Restore</button>`
+      : `<button class="row-btn archive" data-act="archive" data-no="${r.no}" title="Archive">Archive</button>`;
+    const action = `<td class="col-action">${archiveBtn}<button class="row-btn del" data-act="del" data-no="${r.no}" title="Delete">Delete</button></td>`;
+    const hasTodo = String(r.todo || '').trim() !== '';
+    const todoCell = `<td class="col-todo"><button class="todo-btn${hasTodo ? ' has-todo' : ''}" data-no="${r.no}" title="${hasTodo ? 'View / edit To Do Next' : 'Add To Do Next'}"><span class="todo-ico">✎</span><span class="todo-dot"></span></button></td>`;
+    return `<tr data-no="${r.no}">${metaCells}${testCells}${todoCell}${action}</tr>`;
   }).join('');
 
   bindRowEvents();
@@ -1204,6 +1271,12 @@ function bindRowEvents() {
       openInlineDatePicker(el, 'project');
     });
   });
+  document.querySelectorAll('.todo-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openTodoModal(+btn.dataset.no);
+    });
+  });
   document.querySelectorAll('.row-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const no  = +btn.dataset.no;
@@ -1212,7 +1285,7 @@ function bindRowEvents() {
       btn.disabled = true;
       try {
         if (act === 'archive') {
-          if (!confirm(`封存案號 ${r.case || '(未命名)'}？該專案會移到「封存」頁。\nArchive this project? It will move to the Archive tab.`)) return;
+          if (!confirm(`Archive case ${r.case || '(untitled)'}? It will move to the Archive tab.`)) return;
           r.archived = true;
           const res = await dbUpsert(r);
           if (!res.ok) { r.archived = false; render(); return; }
@@ -1223,7 +1296,7 @@ function bindRowEvents() {
           if (!res.ok) { r.archived = true; render(); return; }
           render();
         } else if (act === 'del') {
-          if (!confirm('確定要永久刪除這筆紀錄嗎？此操作無法復原。\nPermanently delete this row? This cannot be undone.')) return;
+          if (!confirm('Permanently delete this row? This cannot be undone.')) return;
           /* Wait for the DB to confirm the row is gone before touching local state.
              If RLS or anything else blocks the delete, the row stays on screen. */
           const res = await dbDelete(r.id);
@@ -1255,12 +1328,12 @@ function openStatusPop(td, evt) {
   const pop = document.createElement('div');
   pop.className = 'pop';
   pop.innerHTML = `
-    <h4>${escapeHtml(TEST_COLS.find(c=>c.key===key).zh)} · 設定狀態 Set Status</h4>
+    <h4>${escapeHtml(TEST_COLS.find(c=>c.key===key).zh)} · Set Status</h4>
     <div class="pop-grid">
       ${STATUSES.map(s =>
         `<button class="${s.cls}${current && current.status===s.id ? ' current' : ''}" data-status="${s.id}">${escapeHtml(s.label)}</button>`
       ).join('')}
-      <button class="clear" data-status="">清除 Clear</button>
+      <button class="clear" data-status="">Clear</button>
     </div>
   `;
   document.body.appendChild(mask);
@@ -1344,6 +1417,43 @@ function openInlineDatePicker(el, kind) {
 }
 
 /* ============================================================
+   To Do Next — per-project note modal (persists to Supabase)
+   ============================================================ */
+let todoEditingNo = null;
+function openTodoModal(no) {
+  const r = rows.find(x => x.no === no); if (!r) return;
+  todoEditingNo = no;
+  document.getElementById('todo-sub').textContent = 'Case ' + (r.case || '(untitled)');
+  const ta = document.getElementById('todo-text');
+  ta.value = r.todo || '';
+  document.getElementById('todo-overlay').hidden = false;
+  setTimeout(() => ta.focus(), 30);
+}
+function closeTodoModal() {
+  const ov = document.getElementById('todo-overlay');
+  if (ov) ov.hidden = true;
+  todoEditingNo = null;
+}
+async function saveTodo() {
+  if (todoEditingNo == null) return;
+  const r = rows.find(x => x.no === todoEditingNo);
+  if (!r) { closeTodoModal(); return; }
+  const ta  = document.getElementById('todo-text');
+  const btn = document.getElementById('todo-save');
+  const val = ta.value;
+  if (String(r.todo || '') === val) { closeTodoModal(); return; }
+  const prev = r.todo || '';
+  r.todo = val;
+  btn.disabled = true;
+  const lbl = btn.textContent; btn.textContent = 'Saving…';
+  const res = await dbUpsert(r);
+  btn.disabled = false; btn.textContent = lbl;
+  if (!res.ok) { r.todo = prev; return; }   /* keep modal open on failure */
+  closeTodoModal();
+  render();
+}
+
+/* ============================================================
    Toolbar
    ============================================================ */
 document.getElementById('search').addEventListener('input', e => {
@@ -1360,7 +1470,7 @@ document.getElementById('add-row').addEventListener('click', () => {
   const newRow = {
     id: crypto.randomUUID(),
     no: nextNo(), case:'', sales:'',
-    sample:'', country:'', est_done:'', note:'', cells:{}, archived:false
+    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false
   };
   rows.push(newRow);
   dbUpsert(newRow);
@@ -1449,7 +1559,7 @@ document.getElementById('file-input').addEventListener('change', e => {
       let txt = ev.target.result;
       if (txt.charCodeAt(0) === 0xFEFF) txt = txt.slice(1);
       const grid = parseCSV(txt);
-      if (grid.length < 2) { alert('CSV 缺少資料 No data found.'); return; }
+      if (grid.length < 2) { alert('No data found.'); return; }
       grid.shift(); // header
       const fresh = grid.filter(r => r.some(v => v && v.trim() !== ''))
         .map((r, idx) => {
@@ -1462,27 +1572,34 @@ document.getElementById('file-input').addEventListener('change', e => {
           if (!obj.no) obj.no = idx + 1;
           return obj;
         });
-      if (!fresh.length) { alert('CSV 沒有可匯入的列 No importable rows.'); return; }
-      if (!confirm(`即將匯入 ${fresh.length} 筆，會覆蓋目前清單。\nImport ${fresh.length} rows? This replaces current data.`)) return;
+      if (!fresh.length) { alert('No importable rows.'); return; }
+      if (!confirm(`Import ${fresh.length} rows? This replaces current data.`)) return;
       const saved = await dbReplaceAll(fresh);
       rows = normalize(saved);
       render();
-    } catch (err) { alert('匯入失敗 Import failed: ' + err.message); }
+    } catch (err) { alert('Import failed: ' + err.message); }
   };
   reader.readAsText(file, 'utf-8');
   e.target.value = '';
 });
 
-/* ---------- ESC closes popover ---------- */
+/* ---------- To Do Next modal wiring ---------- */
+document.getElementById('todo-save').addEventListener('click', saveTodo);
+document.getElementById('todo-cancel').addEventListener('click', closeTodoModal);
+document.getElementById('todo-overlay').addEventListener('click', e => {
+  if (e.target.id === 'todo-overlay') closeTodoModal();   /* click backdrop to dismiss */
+});
+
+/* ---------- ESC closes popover / modals ---------- */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeStatusPop();
+  if (e.key === 'Escape') { closeStatusPop(); closeTodoModal(); }
 });
 
 /* ---------- boot ---------- */
 async function init() {
-  const totalCols = META_COLS.length + TEST_COLS.length + 1;
+  const totalCols = META_COLS.length + TEST_COLS.length + 2;
   document.getElementById('tbody').innerHTML =
-    `<tr class="empty-row"><td colspan="${totalCols}">⏳ 載入中 Loading from Supabase…</td></tr>`;
+    `<tr class="empty-row"><td colspan="${totalCols}">⏳ Loading from Supabase…</td></tr>`;
 
   const raw = await dbLoad();
 
