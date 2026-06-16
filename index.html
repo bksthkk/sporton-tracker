@@ -906,10 +906,8 @@ const META_COLS = [
   { key: 'no',      zh: 'No.',         en: 'No.',        sortable: true,  edit: false, cls: 'col-no' },
   { key: 'case',    zh: 'Case No.',    en: 'Case No.',   sortable: true,  edit: true,  cls: 'col-case' },
   { key: 'sales',   zh: 'Sales',       en: 'Sales',      sortable: true,  edit: true,  cls: '' },
-  { key: 'sample',   zh: 'Sample Recv', en: 'Sample Recv',sortable: true,  edit: true,  cls: '' },
   { key: 'country',  zh: 'Country',     en: 'Country',    sortable: true,  edit: true,  cls: '' },
-  { key: 'est_done', zh: 'Est. Done',   en: 'Est. Done',  sortable: true,  edit: true,  cls: 'meta-date-cell', type: 'date' },
-  { key: 'note',     zh: 'Status Note', en: 'Status Note',sortable: false, edit: true,  cls: 'notes' }
+  { key: 'est_done', zh: 'Est. Done',   en: 'Est. Done',  sortable: true,  edit: true,  cls: 'meta-date-cell', type: 'date' }
 ];
 
 /* Right side – 11 independent test/document status columns from the Excel. */
@@ -932,17 +930,11 @@ const TODO_COL   = { key: '_todo',   zh: 'To Do',  en: 'To Do',  sortable: false
 
 /* Seed data — the five cases present in Project Status.xlsx. */
 const SAMPLE = [
-  { no:1, case:'641411',    sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'',
-    cells:{}, archived:false },
-  { no:2, case:'350940-01', sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
-  { no:3, case:'TE622521',  sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
-  { no:4, case:'631148',    sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false },
-  { no:5, case:'3N2221-05', sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false }
+  { no:1, case:'641411',    sales:'', country:'', est_done:'', todo:'', cells:{}, archived:false },
+  { no:2, case:'350940-01', sales:'', country:'', est_done:'', todo:'', cells:{}, archived:false },
+  { no:3, case:'TE622521',  sales:'', country:'', est_done:'', todo:'', cells:{}, archived:false },
+  { no:4, case:'631148',    sales:'', country:'', est_done:'', todo:'', cells:{}, archived:false },
+  { no:5, case:'3N2221-05', sales:'', country:'', est_done:'', todo:'', cells:{}, archived:false }
 ];
 
 /* ---------- state ---------- */
@@ -965,10 +957,8 @@ function toDb(r) {
     no:       r.no,
     case:     r.case     || '',
     sales:    r.sales    || '',
-    sample:   r.sample   || '',
     country:  r.country  || '',
     est_done: r.est_done || '',           /* project-level YYYY-MM-DD */
-    note:     r.note     || '',
     todo:     r.todo     || '',           /* "To Do Next" free-text note */
     cells:    r.cells    || {},           /* each cell may now have a .due (YYYY-MM-DD) */
     archived: r.archived || false
@@ -1149,7 +1139,7 @@ function visibleRows() {
   if (searchTerm) {
     const t = searchTerm.toLowerCase();
     list = list.filter(r =>
-      ['case','sales','country','note']
+      ['case','sales','country']
         .some(k => String(r[k]||'').toLowerCase().includes(t))
     );
   }
@@ -1241,7 +1231,7 @@ function bindRowEvents() {
       if (r[key] !== val) { r[key] = val; dbUpsert(r); }
     });
     td.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey && td.dataset.key !== 'note') {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault(); td.blur();
       }
     });
@@ -1470,7 +1460,7 @@ document.getElementById('add-row').addEventListener('click', () => {
   const newRow = {
     id: crypto.randomUUID(),
     no: nextNo(), case:'', sales:'',
-    sample:'', country:'', est_done:'', note:'', todo:'', cells:{}, archived:false
+    country:'', est_done:'', todo:'', cells:{}, archived:false
   };
   rows.push(newRow);
   dbUpsert(newRow);
