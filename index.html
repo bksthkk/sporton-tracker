@@ -901,9 +901,11 @@ const STATUSES = [
   { id: 'fail',     label: 'Fail',    en: 'Fail',        cls: 's-fail' }
 ];
 
-/* Left side – text / metadata columns. */
+/* Left side – text / metadata columns.
+   NOTE: `no` is intentionally NOT a column here — it stays as the internal
+   row identifier (data-no attributes, row lookups, ordering, nextNo), but
+   is no longer displayed as a table column. */
 const META_COLS = [
-  { key: 'no',      zh: 'No.',         en: 'No.',        sortable: true,  edit: false, cls: 'col-no' },
   { key: 'case',    zh: 'Case No.',    en: 'Case No.',   sortable: true,  edit: true,  cls: 'col-case' },
   { key: 'sales',   zh: 'Sales',       en: 'Sales',      sortable: true,  edit: true,  cls: '' },
   { key: 'country',  zh: 'Country',     en: 'Country',    sortable: true,  edit: true,  cls: '' },
