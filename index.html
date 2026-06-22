@@ -230,11 +230,6 @@
     outline: 2px solid var(--terracotta); outline-offset: -2px;
     background: #fff !important; text-align: left;
   }
-  tbody td.notes {
-    min-width: 240px; max-width: 320px;
-    white-space: pre-wrap; text-align: left;
-  }
-  tbody td.col-no { width: 44px; color: var(--muted); }
   tbody td.col-case { width: 110px; font-weight: 700; text-align: left; }
   tbody td.col-action { width: 108px; white-space: nowrap; }
   tbody td.col-action .row-btn + .row-btn { margin-left: 4px; }
@@ -715,6 +710,20 @@
   }
   .todo-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
   .todo-actions .btn { min-width: 92px; }
+  .todo-image-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .todo-image-hint { font-size: 11px; color: var(--muted); }
+  .todo-image-preview:not(:empty) { margin-top: 10px; }
+  .todo-image-preview img {
+    display: block; max-width: 100%; max-height: 280px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .todo-img-remove {
+    margin-top: 6px;
+    background: transparent; border: 1px solid var(--line);
+    color: var(--muted); border-radius: 6px;
+    padding: 4px 10px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .todo-img-remove:hover { border-color: var(--s-fail-bg); color: var(--s-fail-bg); }
 
   @media (max-width: 1100px) {
     .hero { flex-direction: column; align-items: flex-start; }
@@ -868,7 +877,13 @@
     <h3>To Do Next</h3>
     <p class="todo-sub" id="todo-sub">Case —</p>
     <textarea id="todo-text" class="todo-textarea"
-              placeholder="Write the next actions for this project…"></textarea>
+              placeholder="Write the next actions for this project… (you can paste a screenshot with Ctrl + V)"></textarea>
+    <div class="todo-image-bar">
+      <button class="btn" id="todo-image-btn" type="button">📎 Add image</button>
+      <span class="todo-image-hint">or paste a screenshot with Ctrl + V</span>
+      <input type="file" id="todo-image-input" accept="image/*" hidden />
+    </div>
+    <div class="todo-image-preview" id="todo-image-preview"></div>
     <div class="todo-actions">
       <button class="btn" id="todo-cancel" type="button">Cancel</button>
       <button class="btn primary" id="todo-save" type="button">Save</button>
@@ -962,6 +977,7 @@ function toDb(r) {
     country:  r.country  || '',
     est_done: r.est_done || '',           /* project-level YYYY-MM-DD */
     todo:     r.todo     || '',           /* "To Do Next" free-text note */
+    todo_image: r.todo_image || '',       /* optional pasted screenshot (compressed data URL) */
     cells:    r.cells    || {},           /* each cell may now have a .due (YYYY-MM-DD) */
     archived: r.archived || false
   };
@@ -1035,6 +1051,7 @@ function normalize(arr) {
     if (typeof r.archived !== 'boolean') r.archived = false;
     if (typeof r.est_done !== 'string') r.est_done = '';
     if (typeof r.todo !== 'string') r.todo = '';
+    if (typeof r.todo_image !== 'string') r.todo_image = '';
     return r;
   });
 }
@@ -1215,7 +1232,7 @@ function render() {
       ? `<button class="row-btn restore" data-act="restore" data-no="${r.no}" title="Restore">Restore</button>`
       : `<button class="row-btn archive" data-act="archive" data-no="${r.no}" title="Archive">Archive</button>`;
     const action = `<td class="col-action">${archiveBtn}<button class="row-btn del" data-act="del" data-no="${r.no}" title="Delete">Delete</button></td>`;
-    const hasTodo = String(r.todo || '').trim() !== '';
+    const hasTodo = String(r.todo || '').trim() !== '' || String(r.todo_image || '') !== '';
     const todoCell = `<td class="col-todo"><button class="todo-btn${hasTodo ? ' has-todo' : ''}" data-no="${r.no}" title="${hasTodo ? 'View / edit To Do Next' : 'Add To Do Next'}"><span class="todo-ico">✎</span><span class="todo-dot"></span></button></td>`;
     return `<tr data-no="${r.no}">${metaCells}${testCells}${todoCell}${action}</tr>`;
   }).join('');
@@ -1412,12 +1429,16 @@ function openInlineDatePicker(el, kind) {
    To Do Next — per-project note modal (persists to Supabase)
    ============================================================ */
 let todoEditingNo = null;
+let todoImage = '';   /* working copy of the image data URL while the modal is open */
+
 function openTodoModal(no) {
   const r = rows.find(x => x.no === no); if (!r) return;
   todoEditingNo = no;
   document.getElementById('todo-sub').textContent = 'Case ' + (r.case || '(untitled)');
   const ta = document.getElementById('todo-text');
   ta.value = r.todo || '';
+  todoImage = r.todo_image || '';
+  renderTodoImagePreview();
   document.getElementById('todo-overlay').hidden = false;
   setTimeout(() => ta.focus(), 30);
 }
@@ -1425,6 +1446,52 @@ function closeTodoModal() {
   const ov = document.getElementById('todo-overlay');
   if (ov) ov.hidden = true;
   todoEditingNo = null;
+  todoImage = '';
+}
+function renderTodoImagePreview() {
+  const wrap = document.getElementById('todo-image-preview');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!todoImage) return;
+  const img = document.createElement('img');
+  img.src = todoImage; img.alt = 'To Do attachment';
+  const rm = document.createElement('button');
+  rm.type = 'button'; rm.className = 'todo-img-remove'; rm.textContent = 'Remove image';
+  rm.addEventListener('click', () => { todoImage = ''; renderTodoImagePreview(); });
+  wrap.appendChild(img);
+  wrap.appendChild(rm);
+}
+/* Downscale + JPEG-compress an image blob so the stored data URL stays small
+   (keeps the projects row — and every page load — from bloating). */
+function compressImageBlob(blob, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (Math.max(w, h) > maxDim) {
+        const s = maxDim / Math.max(w, h);
+        w = Math.round(w * s); h = Math.round(h * s);
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(img.src);
+      try { resolve(c.toDataURL('image/jpeg', quality)); }
+      catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('Could not decode image')); };
+    img.src = URL.createObjectURL(blob);
+  });
+}
+async function setTodoImageFromBlob(blob) {
+  if (!blob) return;
+  if (!/^image\//.test(blob.type || '')) { alert('That file is not an image.'); return; }
+  try {
+    todoImage = await compressImageBlob(blob, 1400, 0.82);
+    renderTodoImagePreview();
+  } catch (err) {
+    alert('Could not read that image: ' + ((err && err.message) || err));
+  }
 }
 async function saveTodo() {
   if (todoEditingNo == null) return;
@@ -1432,15 +1499,16 @@ async function saveTodo() {
   if (!r) { closeTodoModal(); return; }
   const ta  = document.getElementById('todo-text');
   const btn = document.getElementById('todo-save');
-  const val = ta.value;
-  if (String(r.todo || '') === val) { closeTodoModal(); return; }
-  const prev = r.todo || '';
-  r.todo = val;
+  const newText = ta.value, newImage = todoImage;
+  const prevText = r.todo || '', prevImage = r.todo_image || '';
+  if (prevText === newText && prevImage === newImage) { closeTodoModal(); return; }
+  r.todo = newText;
+  r.todo_image = newImage;
   btn.disabled = true;
   const lbl = btn.textContent; btn.textContent = 'Saving…';
   const res = await dbUpsert(r);
   btn.disabled = false; btn.textContent = lbl;
-  if (!res.ok) { r.todo = prev; return; }   /* keep modal open on failure */
+  if (!res.ok) { r.todo = prevText; r.todo_image = prevImage; return; }  /* keep modal open on failure */
   closeTodoModal();
   render();
 }
@@ -1462,7 +1530,7 @@ document.getElementById('add-row').addEventListener('click', () => {
   const newRow = {
     id: crypto.randomUUID(),
     no: nextNo(), case:'', sales:'',
-    country:'', est_done:'', todo:'', cells:{}, archived:false
+    country:'', est_done:'', todo:'', todo_image:'', cells:{}, archived:false
   };
   rows.push(newRow);
   dbUpsert(newRow);
@@ -1580,6 +1648,25 @@ document.getElementById('todo-save').addEventListener('click', saveTodo);
 document.getElementById('todo-cancel').addEventListener('click', closeTodoModal);
 document.getElementById('todo-overlay').addEventListener('click', e => {
   if (e.target.id === 'todo-overlay') closeTodoModal();   /* click backdrop to dismiss */
+});
+/* To Do image: attach via button/file picker, or paste a screenshot (Ctrl+V). */
+document.getElementById('todo-image-btn').addEventListener('click', () => {
+  document.getElementById('todo-image-input').click();
+});
+document.getElementById('todo-image-input').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  await setTodoImageFromBlob(f);
+  e.target.value = '';
+});
+document.getElementById('todo-text').addEventListener('paste', async e => {
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for (const it of items) {
+    if (it.kind === 'file' && /^image\//.test(it.type)) {
+      e.preventDefault();
+      await setTodoImageFromBlob(it.getAsFile());
+      break;
+    }
+  }
 });
 
 /* ---------- ESC closes popover / modals ---------- */
